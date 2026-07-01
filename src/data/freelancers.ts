@@ -4,7 +4,7 @@ export const freelancers: Freelancer[] = [
   {
     id: "fre-001",
     name: "Linh Nguyen",
-    avatar: "/avatars/linh.png",
+    avatar: "/avatars/linh.svg",
     title: "Senior Web3 Designer & Brand Strategist",
     walletAddress: "0x5a2E8B1C4D7F3A9B6E1C4D8F2A5B9E3C7D1F4A8B2",
     rating: 4.98,
@@ -28,7 +28,7 @@ export const freelancers: Freelancer[] = [
   {
     id: "fre-002",
     name: "Marcus Chen",
-    avatar: "/avatars/marcus.png",
+    avatar: "/avatars/marcus.svg",
     title: "Full-Stack Engineer | React, Next.js, Solidity",
     walletAddress: "0x8B3C5E2A9D4F1B6C8E3A5D2F9B4C7E1A6D9F2B5C8",
     rating: 4.95,
@@ -51,7 +51,7 @@ export const freelancers: Freelancer[] = [
   {
     id: "fre-003",
     name: "Sofia Rodriguez",
-    avatar: "/avatars/sofia.png",
+    avatar: "/avatars/sofia.svg",
     title: "Content Strategist & Copywriter",
     walletAddress: "0x2C9D4B7A1E5F3C8B6A2D9E4F1C7B5A8D3E6F9C2B5",
     rating: 4.92,
@@ -74,7 +74,7 @@ export const freelancers: Freelancer[] = [
   {
     id: "fre-004",
     name: "Aarav Patel",
-    avatar: "/avatars/aarav.png",
+    avatar: "/avatars/aarav.svg",
     title: "Telegram & Discord Bot Developer",
     walletAddress: "0x7E2A5B8C1D4F9E3B6A8C2D5F1B7E4A9C3D6F2B5E8",
     rating: 4.97,
@@ -97,7 +97,7 @@ export const freelancers: Freelancer[] = [
   {
     id: "fre-005",
     name: "Emma Schmidt",
-    avatar: "/avatars/emma.png",
+    avatar: "/avatars/emma.svg",
     title: "SEO & Growth Marketing Expert",
     walletAddress: "0x4D8B2C5E9A3F1D6B7C4A9E2D5F8B1C6A3D9E4F7B2",
     rating: 4.89,
@@ -119,7 +119,7 @@ export const freelancers: Freelancer[] = [
   {
     id: "fre-006",
     name: "Kenji Tanaka",
-    avatar: "/avatars/kenji.png",
+    avatar: "/avatars/kenji.svg",
     title: "AI/ML Engineer | LangChain, RAG, Agents",
     walletAddress: "0x6F1B4C8A2D5E9B3C7F1A4D8B2C6E5F9A3D7B1C4E8",
     rating: 4.96,

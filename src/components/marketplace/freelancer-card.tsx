@@ -29,8 +29,12 @@ export function FreelancerCard({ freelancer, index = 0 }: FreelancerCardProps) {
 
           <div className="px-5 pb-5">
             <div className="relative -mt-10 mb-3 flex items-end justify-between">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl border-4 border-[hsl(var(--background))] bg-gradient-to-br from-violet-500 to-cyan-500 font-display text-xl font-bold text-white shadow-lg">
-                {freelancer.name.charAt(0)}
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl border-4 border-[hsl(var(--background))] bg-gradient-to-br from-violet-500 to-cyan-500 shadow-lg overflow-hidden">
+                {freelancer.avatar ? (
+                  <img src={freelancer.avatar} alt={freelancer.name} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="font-display text-xl font-bold text-white">{freelancer.name.charAt(0)}</span>
+                )}
               </div>
               {freelancer.verified && (
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-cyan-500">

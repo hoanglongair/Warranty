@@ -8,11 +8,14 @@ import { formatAddress } from "@/lib/utils";
 import { WalletModal } from "./wallet-modal";
 import Link from "next/link";
 
+const ARC_CHAIN_ID = 5042002;
+
 export function WalletButton() {
   const [open, setOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const { connected, address, ensName, balance, disconnect } = useWalletStore();
+  const { connected, address, ensName, balance, chainId, disconnect } = useWalletStore();
+  const isArcTestnet = chainId === ARC_CHAIN_ID;
 
   const handleCopy = () => {
     if (address) {
@@ -44,12 +47,14 @@ export function WalletButton() {
         className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-medium text-white transition-all hover:border-violet-500/30 hover:bg-white/[0.08]"
       >
         <div className="relative">
-          <div className="h-7 w-7 rounded-full bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-500" />
+          <div className="h-7 w-7 rounded-full overflow-hidden flex items-center justify-center bg-white p-0.5">
+            <img src="/arc-logo.png" alt="Arc" className="object-contain w-full h-full" />
+          </div>
           <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[hsl(var(--background))] bg-green-500" />
         </div>
         <div className="hidden flex-col items-start leading-tight md:flex">
           <span className="text-xs font-semibold text-white">
-            {balance.toFixed(3)} ETH
+            {balance.toFixed(3)} {isArcTestnet ? "USDC" : "ETH"}
           </span>
           <span className="text-[10px] text-white/50">
             {ensName || formatAddress(address || "")}

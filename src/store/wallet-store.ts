@@ -77,12 +77,12 @@ const mockTransactions: Transaction[] = [
 export const useWalletStore = create<WalletStore>()(
   persist(
     (set) => ({
-      connected: false,
-      address: null,
-      provider: null,
-      balance: 0,
-      chainId: 1,
-      ensName: undefined,
+      connected: true,
+      address: "0x9F2A8B4C1D7E3F5B8A2C9D4E6F1B7A3C8E2D5F9B1",
+      provider: "metamask" as WalletProvider,
+      balance: 4.825,
+      chainId: 5042002, // Arc Testnet
+      ensName: "user.warranty.eth",
       transactions: mockTransactions,
       connect: (provider, address) =>
         set({
@@ -90,7 +90,7 @@ export const useWalletStore = create<WalletStore>()(
           provider,
           address,
           balance: 4.825,
-          chainId: 1,
+          chainId: 5042002,
           ensName: "user.warranty.eth"
         }),
       disconnect: () =>
@@ -98,6 +98,8 @@ export const useWalletStore = create<WalletStore>()(
           connected: false,
           address: null,
           provider: null,
+          balance: 0,
+          chainId: 1,
           ensName: undefined
         }),
       addTransaction: (tx) =>
