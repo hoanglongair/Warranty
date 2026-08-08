@@ -36,54 +36,176 @@ function walletFlag(id: WalletProvider): keyof EthereumProvider | null {
   return map[id];
 }
 
+interface CustomWindow {
+  ethereum?: EthereumProvider;
+  okxwallet?: EthereumProvider;
+  coinbaseWalletExtension?: EthereumProvider;
+  trustwallet?: EthereumProvider;
+  phantom?: { ethereum?: EthereumProvider };
+  binancew3w?: EthereumProvider;
+  binance?: EthereumProvider;
+}
+
+function isPureMetaMask(p: EthereumProvider): boolean {
+  if (!p || !p.isMetaMask) return false;
+  const anyP = p as unknown as Record<string, boolean | undefined>;
+  if (
+    anyP.isOKXWallet ||
+    anyP.isOkxWallet ||
+    anyP.isBraveWallet ||
+    anyP.isCoinbaseWallet ||
+    anyP.isPhantom ||
+    anyP.isRabby ||
+    anyP.isTrust ||
+    anyP.isBinanceW3W ||
+    anyP.isBinance
+  ) {
+    return false;
+  }
+  return true;
+}
+
+const eip6963Providers: Record<string, EthereumProvider> = {};
+
+if (typeof window !== "undefined") {
+  const handleAnnounce = (event: Event) => {
+    const customEvent = event as CustomEvent<{
+      info: { rdns?: string; name?: string };
+      provider: EthereumProvider;
+    }>;
+    if (customEvent.detail && customEvent.detail.provider) {
+      const { rdns, name } = customEvent.detail.info || {};
+      const provider = customEvent.detail.provider;
+      const lowerRdns = rdns ? rdns.toLowerCase() : "";
+      const lowerName = name ? name.toLowerCase() : "";
+
+      if (lowerRdns.includes("metamask") || lowerName.includes("metamask")) {
+        eip6963Providers["metamask"] = provider;
+      }
+      if (lowerRdns.includes("okx") || lowerRdns.includes("okex") || lowerName.includes("okx")) {
+        eip6963Providers["okx"] = provider;
+      }
+      if (lowerRdns.includes("coinbase") || lowerName.includes("coinbase")) {
+        eip6963Providers["coinbase"] = provider;
+      }
+      if (lowerRdns.includes("phantom") || lowerName.includes("phantom")) {
+        eip6963Providers["phantom"] = provider;
+      }
+      if (lowerRdns.includes("trust") || lowerName.includes("trust")) {
+        eip6963Providers["trust"] = provider;
+      }
+      if (lowerRdns.includes("binance") || lowerName.includes("binance")) {
+        eip6963Providers["binance"] = provider;
+      }
+    }
+  };
+
+  window.addEventListener("eip6963:announceProvider", handleAnnounce);
+  try {
+    window.dispatchEvent(new Event("eip6963:requestProvider"));
+  } catch {
+    // Ignore in non-supporting contexts
+  }
+}
+
 export function getProvider(id: WalletProvider): EthereumProvider | null {
   if (typeof window === "undefined") return null;
-  const w = window;
-  if (!w.ethereum) return null;
 
-  const flag = walletFlag(id);
-  if (!flag) return null;
-
-  if (Array.isArray(w.ethereum.providers)) {
-    const hit = w.ethereum.providers.find((p) => Boolean(p[flag]));
-    if (hit) return hit;
+  // 1. Check EIP-6963 discovered providers FIRST
+  if (eip6963Providers[id] && typeof eip6963Providers[id].request === "function") {
+    return eip6963Providers[id];
   }
 
-  const ep = w.ethereum as EthereumProvider;
-  if (ep[flag]) return ep;
+  const w = window as unknown as CustomWindow;
 
-  // OKX direct injection fallback
-  if (id === "okx" && ep.isOKXWallet) return ep;
+  // Dedicated window objects injected by specific extensions
+  if (id === "okx" && w.okxwallet && typeof w.okxwallet.request === "function") {
+    return w.okxwallet;
+  }
+  if (id === "coinbase" && w.coinbaseWalletExtension && typeof w.coinbaseWalletExtension.request === "function") {
+    return w.coinbaseWalletExtension;
+  }
+  if (id === "phantom" && w.phantom?.ethereum && typeof w.phantom.ethereum.request === "function") {
+    return w.phantom.ethereum;
+  }
+  if (id === "trust" && w.trustwallet && typeof w.trustwallet.request === "function") {
+    return w.trustwallet;
+  }
+  if (id === "binance" && (w.binancew3w || w.binance)) {
+    const b = w.binancew3w || w.binance;
+    if (b && typeof b.request === "function") return b;
+  }
+
+  if (!w.ethereum) return null;
+
+  // Handle window.ethereum.providers array (Multi-extension environment)
+  if (Array.isArray(w.ethereum.providers)) {
+    const providers = w.ethereum.providers;
+
+    if (id === "metamask") {
+      const pureMetaMask = providers.find(isPureMetaMask);
+      if (pureMetaMask) return pureMetaMask;
+      const anyMetaMask = providers.find((p) => p.isMetaMask);
+      if (anyMetaMask) return anyMetaMask;
+    }
+
+    if (id === "okx") {
+      const hit = providers.find((p) => {
+        const anyP = p as unknown as Record<string, boolean | undefined>;
+        return Boolean(anyP.isOKXWallet || anyP.isOkxWallet);
+      });
+      if (hit) return hit;
+    }
+
+    if (id === "coinbase") {
+      const hit = providers.find((p) => p.isCoinbaseWallet);
+      if (hit) return hit;
+    }
+
+    if (id === "phantom") {
+      const hit = providers.find((p) => p.isPhantom);
+      if (hit) return hit;
+    }
+
+    if (id === "trust") {
+      const hit = providers.find((p) => p.isTrust);
+      if (hit) return hit;
+    }
+
+    if (id === "binance") {
+      const hit = providers.find((p) => p.isBinanceW3W || p.isBinance);
+      if (hit) return hit;
+    }
+  }
+
+  // Handle single window.ethereum injection
+  const ep = w.ethereum as EthereumProvider;
+
+  if (id === "metamask") {
+    if (isPureMetaMask(ep)) return ep;
+    if (ep.isMetaMask && !(ep as unknown as Record<string, boolean | undefined>).isOKXWallet) return ep;
+    return null;
+  }
+
+  if (id === "okx") {
+    const anyEp = ep as unknown as Record<string, boolean | undefined>;
+    if (anyEp.isOKXWallet || anyEp.isOkxWallet) return ep;
+  }
+
+  if (id === "coinbase" && ep.isCoinbaseWallet) return ep;
+  if (id === "phantom" && ep.isPhantom) return ep;
+  if (id === "trust" && ep.isTrust) return ep;
+  if (id === "binance" && (ep.isBinanceW3W || ep.isBinance)) return ep;
+
+  // Fallback only if no specific wallet flag matches above
+  if (typeof ep.request === "function") return ep;
 
   return null;
 }
 
 export function hasWalletExtension(id: WalletProvider): boolean {
   if (typeof window === "undefined") return false;
-  const w = window;
-  if (!w.ethereum) return false;
-  if (id === "walletconnect") return false;
-
-  const flag = walletFlag(id);
-  if (!flag) return false;
-
-  if (Array.isArray(w.ethereum.providers)) {
-    if (w.ethereum.providers.some((p) => Boolean(p[flag]))) return true;
-  }
-  if (Boolean((w.ethereum as EthereumProvider)[flag])) return true;
-
-  // OKX fallback: check direct ethereum object for known OKX properties
-  if (id === "okx") {
-    const ep = w.ethereum as EthereumProvider;
-    if (ep.isOKXWallet) return true;
-    if (typeof ep.request === "function" && (ep as unknown as { isOkxWallet?: boolean }).isOkxWallet) return true;
-  }
-  if (id === "binance") {
-    const ep = w.ethereum as EthereumProvider;
-    if (ep.isBinanceW3W || ep.isBinance) return true;
-  }
-
-  return false;
+  return getProvider(id) !== null;
 }
 
 export async function requestAccounts(id: WalletProvider): Promise<string[]> {
@@ -93,13 +215,39 @@ export async function requestAccounts(id: WalletProvider): Promise<string[]> {
       "Không tìm thấy ví extension. Vui lòng cài MetaMask / OKX / Coinbase / Trust / Phantom / Binance Web3 và tải lại trang."
     );
   }
-  const accounts = (await provider.request({
+
+  const requestPromise = provider.request({
     method: "eth_requestAccounts"
-  })) as string[];
-  if (!accounts || accounts.length === 0) {
-    throw new Error("Ví chưa cấp quyền truy cập tài khoản.");
+  }) as Promise<string[]>;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => {
+      reject(new Error("Thời gian yêu cầu kết nối đã quá hạn. Vui lòng thử lại."));
+    }, 20000);
+  });
+
+  try {
+    const accounts = await Promise.race([requestPromise, timeoutPromise]);
+    if (!accounts || accounts.length === 0) {
+      throw new Error("Ví chưa cấp quyền truy cập tài khoản.");
+    }
+    return accounts;
+  } catch (err: unknown) {
+    const e = err as { code?: number; message?: string };
+    if (e?.code === -32000) {
+      throw new Error("Yêu cầu kết nối đang chờ xử lý. Vui lòng mở icon tiện ích ví trên trình duyệt để phê duyệt.");
+    }
+    if (
+      e?.code === 4001 ||
+      e?.message?.toLowerCase().includes("reject") ||
+      e?.message?.toLowerCase().includes("user denied") ||
+      e?.message?.toLowerCase().includes("canceled") ||
+      e?.message?.toLowerCase().includes("cancelled")
+    ) {
+      throw new Error("Bạn đã từ chối hoặc hủy yêu cầu kết nối ví.");
+    }
+    throw err;
   }
-  return accounts;
 }
 
 export async function getChainId(id: WalletProvider): Promise<string> {

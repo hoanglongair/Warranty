@@ -119,6 +119,29 @@ export function WalletModal({ open, onClose }: WalletModalProps) {
     return () => setConnecting(null);
   }, [open]);
 
+  // Automatically cancel connecting spinner if user returns focus to app after closing wallet extension popup
+  useEffect(() => {
+    if (!connecting) return;
+
+    let timer: NodeJS.Timeout;
+    const handleFocus = () => {
+      timer = setTimeout(() => {
+        setConnecting((prev) => {
+          if (prev && !useWalletStore.getState().connected) {
+            return null;
+          }
+          return prev;
+        });
+      }, 1200);
+    };
+
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      if (timer) clearTimeout(timer);
+    };
+  }, [connecting]);
+
   // Lock body scroll and listen to ESC key press when modal is open
   useEffect(() => {
     if (!open) return;
@@ -147,7 +170,6 @@ export function WalletModal({ open, onClose }: WalletModalProps) {
     setConnecting(walletId);
     setError(null);
 
-    let unsub: (() => void) | null = null;
     try {
       const accounts = await requestAccounts(walletId as WalletProvider);
       const address = accounts[0];
@@ -177,7 +199,7 @@ export function WalletModal({ open, onClose }: WalletModalProps) {
         realConnection: true
       });
 
-      unsub = watchWallet(walletId as WalletProvider, {
+      watchWallet(walletId as WalletProvider, {
         onAccountsChanged: (next) => {
           if (!next || next.length === 0) {
             useWalletStore.getState().disconnect();
@@ -208,10 +230,10 @@ export function WalletModal({ open, onClose }: WalletModalProps) {
       });
 
       onClose();
-      setConnecting(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Không thể kết nối ví.";
       setError(message);
+    } finally {
       setConnecting(null);
     }
   };

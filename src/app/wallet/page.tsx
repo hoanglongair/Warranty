@@ -247,8 +247,8 @@ export default function WalletPage() {
                 { name: isArcTestnet ? "USDC" : "Ethereum", symbol, amount: balance, value: usdValue, color: "from-violet-500 to-purple-500" },
                 { name: "USD Coin", symbol: "USDC", amount: 2847.50, value: 2847.50, color: "from-blue-500 to-cyan-500" },
                 { name: "Tether", symbol: "USDT", amount: 1230.00, value: 1230.00, color: "from-green-500 to-emerald-500" },
-              ].map((asset) => (
-                <div key={asset.symbol} className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/5">
+              ].map((asset, index) => (
+                <div key={`${asset.name}-${index}`} className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/5">
                   <div className="flex items-center gap-3">
                     <div className={`h-10 w-10 rounded-full bg-gradient-to-br ${asset.color} flex items-center justify-center font-bold text-white`}>
                       {asset.symbol.charAt(0)}
