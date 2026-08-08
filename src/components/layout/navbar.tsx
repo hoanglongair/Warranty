@@ -20,7 +20,8 @@ const navLinks = [
   { href: "/dashboard", key: "nav.dashboard" },
   { href: "/profile", key: "nav.profile" },
   { href: "/faq", key: "nav.faq" },
-  { href: "/wallet", key: "nav.wallet" }
+  { href: "/wallet", key: "nav.wallet" },
+  { href: "/faucet", key: "nav.faucet" }
 ];
 
 export function Navbar() {

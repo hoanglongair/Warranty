@@ -25,7 +25,7 @@ export function Logo({ className, size = "md", animated = false }: LogoProps) {
         transition={{ type: "spring", stiffness: 300 }}
       >
         <Image
-          src="/logo.svg"
+          src="/logo.png"
           alt="Warranty"
           width={sizes[size].img}
           height={sizes[size].img}

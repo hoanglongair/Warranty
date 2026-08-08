@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  ArrowDownUp, ChevronDown, Loader2, Check, 
-  AlertCircle, Info, TrendingUp
+import {
+  ArrowDownUp, ChevronDown, Loader2, Check,
+  AlertCircle, Info, TrendingUp, RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTokenPrices, formatPrice, formatChange } from "@/lib/hooks/use-token-prices";
+import { TOKEN_PRICES } from "@/config/tokens";
 
 interface Token {
   symbol: string;
@@ -14,14 +17,68 @@ interface Token {
   amount: number;
   value: number;
   icon: string;
-  color: string;
+  coingeckoId: string;
 }
 
+// Get dynamic prices from CoinGecko
+const getTokenValue = (symbol: string, prices: Record<string, { price: number; change24h: number }>): number => {
+  const priceMap: Record<string, string> = {
+    ETH: "ethereum",
+    USDC: "usd-coin",
+    USDT: "tether",
+    BNB: "binancecoin",
+    SOL: "solana",
+    XRP: "ripple",
+    DOGE: "dogecoin",
+    ADA: "cardano",
+    LINK: "chainlink",
+    AVAX: "avalanche-2",
+    DOT: "polkadot",
+    UNI: "uniswap",
+    ARB: "arbitrum",
+    NEAR: "near",
+    ATOM: "cosmos",
+    FIL: "filecoin",
+    APT: "aptos",
+    LTC: "litecoin",
+  };
+
+  const coingeckoId = priceMap[symbol];
+  if (coingeckoId && prices[coingeckoId]) {
+    return prices[coingeckoId].price;
+  }
+
+  // Fallback to TOKEN_PRICES
+  const fallbackPrices: Record<string, number> = {
+    ETH: TOKEN_PRICES.ETH,
+    USDC: TOKEN_PRICES.USDC,
+    USDT: TOKEN_PRICES.USDT,
+    BNB: TOKEN_PRICES.BNB,
+    SOL: TOKEN_PRICES.SOL,
+    XRP: TOKEN_PRICES.XRP,
+    DOGE: TOKEN_PRICES.DOGE,
+    ADA: TOKEN_PRICES.ADA,
+    LINK: TOKEN_PRICES.LINK,
+    AVAX: TOKEN_PRICES.AVAX,
+    DOT: TOKEN_PRICES.DOT,
+    UNI: TOKEN_PRICES.UNI,
+    ARB: TOKEN_PRICES.ARB,
+    NEAR: TOKEN_PRICES.NEAR,
+    ATOM: TOKEN_PRICES.ATOM,
+    FIL: TOKEN_PRICES.FIL,
+    APT: TOKEN_PRICES.APT,
+    LTC: TOKEN_PRICES.LTC,
+    WARR: 0.12,
+  };
+
+  return fallbackPrices[symbol] || 1;
+};
+
 const tokens: Token[] = [
-  { symbol: "USDC", name: "USD Coin", amount: 2847.50, value: 1, icon: "$", color: "from-blue-500 to-cyan-500" },
-  { symbol: "ETH", name: "Ethereum", amount: 4.825, value: 2950, icon: "Ξ", color: "from-violet-500 to-purple-500" },
-  { symbol: "USDT", name: "Tether", amount: 1230.00, value: 1, icon: "$", color: "from-green-500 to-emerald-500" },
-  { symbol: "WARR", name: "Warranty Token", amount: 500, value: 2.5, icon: "W", color: "from-amber-500 to-orange-500" },
+  { symbol: "USDC", name: "USD Coin", amount: 2847.50, value: 1, icon: "/tokens/usdc.svg", coingeckoId: "usd-coin" },
+  { symbol: "ETH", name: "Ethereum", amount: 4.825, value: TOKEN_PRICES.ETH, icon: "/tokens/eth.svg", coingeckoId: "ethereum" },
+  { symbol: "USDT", name: "Tether", amount: 1230.00, value: 1, icon: "/tokens/usdt.svg", coingeckoId: "tether" },
+  { symbol: "WARR", name: "Warranty Token", amount: 500, value: 0.12, icon: "/tokens/warr.svg", coingeckoId: "" },
 ];
 
 interface SwapRate {
@@ -30,16 +87,15 @@ interface SwapRate {
   rate: number;
 }
 
-const swapRates: Record<string, SwapRate> = {
-  "USDC-ETH": { from: "USDC", to: "ETH", rate: 0.000338 },
-  "ETH-USDC": { from: "ETH", to: "USDC", rate: 2950 },
-  "USDT-USDC": { from: "USDT", to: "USDC", rate: 1 },
-  "USDC-USDT": { from: "USDC", to: "USDT", rate: 1 },
-  "USDC-WARR": { from: "USDC", to: "WARR", rate: 0.4 },
-  "WARR-USDC": { from: "WARR", to: "USDC", rate: 2.5 },
+// Dynamic swap rates based on prices
+const getSwapRate = (from: string, to: string, prices: Record<string, { price: number; change24h: number }>): number => {
+  const fromValue = getTokenValue(from, prices);
+  const toValue = getTokenValue(to, prices);
+  return fromValue / toValue;
 };
 
 export function SwapComponent() {
+  const { prices, loading, refetch } = useTokenPrices();
   const [fromToken, setFromToken] = useState<Token>(tokens[0]);
   const [toToken, setToToken] = useState<Token>(tokens[1]);
   const [fromAmount, setFromAmount] = useState("");
@@ -50,16 +106,19 @@ export function SwapComponent() {
   const [swapSuccess, setSwapSuccess] = useState(false);
   const [slippage, setSlippage] = useState(0.5);
 
+  // Get dynamic values
+  const fromValue = getTokenValue(fromToken.symbol, prices);
+  const toValue = getTokenValue(toToken.symbol, prices);
+
   useEffect(() => {
     if (fromAmount && !isNaN(parseFloat(fromAmount))) {
-      const rateKey = `${fromToken.symbol}-${toToken.symbol}`;
-      const rate = swapRates[rateKey]?.rate || 1 / (swapRates[`${toToken.symbol}-${fromToken.symbol}`]?.rate || 1);
+      const rate = getSwapRate(fromToken.symbol, toToken.symbol, prices);
       const calculated = parseFloat(fromAmount) * rate;
       setToAmount(calculated.toFixed(6).replace(/\.?0+$/, ""));
     } else {
       setToAmount("");
     }
-  }, [fromAmount, fromToken, toToken]);
+  }, [fromAmount, fromToken, toToken, prices]);
 
   const handleSwapTokens = () => {
     const temp = fromToken;
@@ -71,24 +130,25 @@ export function SwapComponent() {
 
   const handleSwap = async () => {
     if (!fromAmount || parseFloat(fromAmount) <= 0) return;
-    
+
     setIsSwapping(true);
-    
+
     // Simulate swap transaction
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
+
     setIsSwapping(false);
     setSwapSuccess(true);
     setTimeout(() => setSwapSuccess(false), 3000);
-    
+
     // Reset amounts
     setFromAmount("");
     setToAmount("");
   };
 
-  const rateKey = `${fromToken.symbol}-${toToken.symbol}`;
-  const currentRate = swapRates[rateKey]?.rate || 1 / (swapRates[`${toToken.symbol}-${fromToken.symbol}`]?.rate || 1);
+  // Dynamic rate calculation
+  const currentRate = getSwapRate(fromToken.symbol, toToken.symbol, prices);
   const minReceived = toAmount ? (parseFloat(toAmount) * (1 - slippage / 100)).toFixed(6).replace(/\.?0+$/, "") : "0";
+  const estimatedFee = fromToken.symbol === "ETH" ? 0.005 * TOKEN_PRICES.ETH : 1; // Dynamic fee
 
   return (
     <div className="space-y-6">
@@ -115,13 +175,11 @@ export function SwapComponent() {
               onClick={() => setShowFromDropdown(!showFromDropdown)}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/10 hover:bg-white/[0.08] transition-colors"
             >
-              <div className={cn("h-6 w-6 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-bold text-sm", fromToken.color)}>
-                {fromToken.icon}
-              </div>
+              <Image src={fromToken.icon} alt={fromToken.symbol} width={24} height={24} className="h-6 w-6 rounded-full" />
               <span className="font-semibold text-white">{fromToken.symbol}</span>
               <ChevronDown className="h-4 w-4 text-white/50" />
             </button>
-            
+
             <AnimatePresence>
               {showFromDropdown && (
                 <motion.div
@@ -146,9 +204,7 @@ export function SwapComponent() {
                         token.symbol === fromToken.symbol && "bg-white/[0.05]"
                       )}
                     >
-                      <div className={cn("h-8 w-8 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-bold", token.color)}>
-                        {token.icon}
-                      </div>
+                      <Image src={token.icon} alt={token.symbol} width={32} height={32} className="h-8 w-8 rounded-full" />
                       <div className="text-left">
                         <p className="font-semibold text-white">{token.symbol}</p>
                         <p className="text-xs text-white/40">{token.name}</p>
@@ -201,13 +257,11 @@ export function SwapComponent() {
               onClick={() => setShowToDropdown(!showToDropdown)}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/10 hover:bg-white/[0.08] transition-colors"
             >
-              <div className={cn("h-6 w-6 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-bold text-sm", toToken.color)}>
-                {toToken.icon}
-              </div>
+              <Image src={toToken.icon} alt={toToken.symbol} width={24} height={24} className="h-6 w-6 rounded-full" />
               <span className="font-semibold text-white">{toToken.symbol}</span>
               <ChevronDown className="h-4 w-4 text-white/50" />
             </button>
-            
+
             <AnimatePresence>
               {showToDropdown && (
                 <motion.div
@@ -232,9 +286,7 @@ export function SwapComponent() {
                         token.symbol === toToken.symbol && "bg-white/[0.05]"
                       )}
                     >
-                      <div className={cn("h-8 w-8 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-bold", token.color)}>
-                        {token.icon}
-                      </div>
+                      <Image src={token.icon} alt={token.symbol} width={32} height={32} className="h-8 w-8 rounded-full" />
                       <div className="text-left">
                         <p className="font-semibold text-white">{token.symbol}</p>
                         <p className="text-xs text-white/40">{token.name}</p>
@@ -301,8 +353,29 @@ export function SwapComponent() {
         
         <div className="flex items-center justify-between text-sm">
           <span className="text-white/50">Network Fee</span>
-          <span className="text-white">~$2.50</span>
+          <span className="text-white">~${formatPrice(estimatedFee)}</span>
         </div>
+      </div>
+
+      {/* Price Header with Live Updates */}
+      <div className="flex items-center justify-between text-xs text-white/40">
+        <div className="flex items-center gap-2">
+          {loading ? (
+            <RefreshCw className="h-3 w-3 animate-spin" />
+          ) : (
+            <>
+              <span>ETH: ${formatPrice(TOKEN_PRICES.ETH)}</span>
+              <span className="text-green-400">{formatChange(prices.ethereum?.change24h || 1.0)}</span>
+            </>
+          )}
+        </div>
+        <button
+          onClick={refetch}
+          className="flex items-center gap-1 hover:text-white/60 transition-colors"
+        >
+          <RefreshCw className="h-3 w-3" />
+          Update
+        </button>
       </div>
 
       {/* Swap Button */}

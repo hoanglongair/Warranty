@@ -123,16 +123,40 @@ export interface Transaction {
   id: string;
   type: "incoming" | "outgoing" | "pending";
   amount: number;
-  currency: "USDC" | "ETH" | "USDT";
+  currency: "USDC" | "ETH" | "USDT" | "EURC";
   from: string;
   to: string;
   date: string;
   status: "completed" | "pending" | "failed";
   hash: string;
   description: string;
+  chainId?: number;
 }
 
-export type WalletProvider = "metamask" | "walletconnect" | "coinbase";
+export interface ChainInfo {
+  id: number;
+  name: string;
+  symbol: string;
+  rpcUrl: string;
+  explorerUrl: string;
+  isTestnet: boolean;
+  nativeToken: string;
+  avgGasFeeUsd: number;
+  avgSettlementTime: string;
+  logo?: string;
+}
+
+export interface TokenInfo {
+  address: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  nativeDecimals?: number;
+  isNative: boolean;
+  logo: string;
+}
+
+export type WalletProvider = "metamask" | "walletconnect" | "coinbase" | "okx" | "trust" | "phantom" | "binance";
 
 export interface WalletState {
   connected: boolean;

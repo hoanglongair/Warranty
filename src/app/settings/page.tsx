@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { User, Shield, Wallet, Bell, Palette, Globe, Save, Check } from "lucide-react";
+import Image from "next/image";
 import { useWalletStore } from "@/store/wallet-store";
 import { formatAddress } from "@/lib/utils";
 import { LanguageSwitcherInline } from "@/components/language/language-switcher";
@@ -200,8 +201,15 @@ export default function SettingsPage() {
                 <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center font-bold text-white">
-                        {provider === "metamask" ? "🦊" : provider === "walletconnect" ? "📱" : "🔵"}
+                      <div className="h-12 w-12 rounded-xl bg-white/10 flex items-center justify-center overflow-hidden">
+                        {provider && (
+                          <Image
+                            src={`/wallets/${provider}.png`}
+                            alt={provider}
+                            width={28}
+                            height={28}
+                          />
+                        )}
                       </div>
                       <div>
                         <p className="font-semibold text-white capitalize">{provider} Wallet</p>

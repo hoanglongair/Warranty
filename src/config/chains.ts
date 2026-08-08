@@ -1,3 +1,5 @@
+import { ARC_CHAIN_ID_DECIMAL, ARC_CHAIN_ID_HEX, ARC_TESTNET_RPC, ARC_TESTNET_EXPLORER } from "./tokens";
+
 interface Chain {
   id: number;
   name: string;
@@ -18,7 +20,7 @@ interface Chain {
 }
 
 export const arcTestnet: Chain = {
-  id: 5042002,
+  id: ARC_CHAIN_ID_DECIMAL,
   name: "Arc Testnet",
   nativeCurrency: {
     decimals: 6,
@@ -27,35 +29,35 @@ export const arcTestnet: Chain = {
   },
   rpcUrls: {
     default: {
-      http: ["https://rpc.testnet.arc.network"],
+      http: [ARC_TESTNET_RPC],
     },
     public: {
-      http: ["https://rpc.testnet.arc.network"],
+      http: [ARC_TESTNET_RPC],
     },
   },
   blockExplorers: {
     etherscan: {
       name: "ArcScan",
-      url: "https://testnet.arcscan.app",
+      url: ARC_TESTNET_EXPLORER,
     },
     default: {
       name: "ArcScan",
-      url: "https://testnet.arcscan.app",
+      url: ARC_TESTNET_EXPLORER,
     },
   },
   testnet: true,
 };
 
 export const arcTestnetParams = {
-  chainId: "0x4CF4B2", // 5042002 in hex
+  chainId: ARC_CHAIN_ID_HEX,
   chainName: "Arc Testnet",
   nativeCurrency: {
     name: "USDC",
     symbol: "USDC",
     decimals: 6,
   },
-  rpcUrls: ["https://rpc.testnet.arc.network"],
-  blockExplorerUrls: ["https://testnet.arcscan.app"],
+  rpcUrls: [ARC_TESTNET_RPC],
+  blockExplorerUrls: [ARC_TESTNET_EXPLORER],
 };
 
 export const SUPPORTED_CHAINS = {
@@ -67,10 +69,10 @@ export const SUPPORTED_CHAINS = {
     explorer: "https://etherscan.io",
   },
   arcTestnet: {
-    id: 5042002,
+    id: ARC_CHAIN_ID_DECIMAL,
     name: "Arc Testnet",
     symbol: "USDC",
-    rpcUrl: "https://rpc.testnet.arc.network",
-    explorer: "https://testnet.arcscan.app",
+    rpcUrl: ARC_TESTNET_RPC,
+    explorer: ARC_TESTNET_EXPLORER,
   },
 };

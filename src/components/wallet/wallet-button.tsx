@@ -1,11 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wallet, LogOut, Copy, Check, ChevronDown } from "lucide-react";
+import { Wallet, LogOut, Copy, Check, ChevronDown, RefreshCcw } from "lucide-react";
 import { useWalletStore } from "@/store/wallet-store";
 import { formatAddress } from "@/lib/utils";
 import { WalletModal } from "./wallet-modal";
+import {
+  ensureArcTestnet,
+  formatBalanceWeiToEth,
+  getBalance,
+  getChainId,
+  isArcChain,
+  watchWallet
+} from "@/lib/wallet-connect";
 import Link from "next/link";
 
 const ARC_CHAIN_ID = 5042002;
@@ -14,8 +22,89 @@ export function WalletButton() {
   const [open, setOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const { connected, address, ensName, balance, chainId, disconnect } = useWalletStore();
+  const [refreshing, setRefreshing] = useState(false);
+  const {
+    connected,
+    address,
+    ensName,
+    balance,
+    chainId,
+    provider,
+    realConnection,
+    disconnect,
+    setBalance,
+    setChainId,
+    setError
+  } = useWalletStore();
   const isArcTestnet = chainId === ARC_CHAIN_ID;
+
+  useEffect(() => {
+    if (!connected || !realConnection || !provider) return;
+    let cancelled = false;
+    let unsub: (() => void) | null = null;
+
+    (async () => {
+      try {
+        const chainHex = await getChainId(provider);
+        if (cancelled) return;
+        setChainId(parseInt(chainHex, 16));
+        if (address) {
+          const wei = await getBalance(provider, address);
+          if (!cancelled) setBalance(formatBalanceWeiToEth(wei));
+        }
+        unsub = watchWallet(provider, {
+          onAccountsChanged: (next) => {
+            if (!next || next.length === 0) {
+              disconnect();
+            }
+          },
+          onChainChanged: (next) => {
+            const newChainId = parseInt(next, 16);
+            setChainId(newChainId);
+            if (!isArcChain(next)) {
+              setError("Bạn đang ở chain khác Arc Testnet.");
+            } else {
+              setError(null);
+            }
+          },
+          onDisconnect: () => disconnect()
+        });
+      } catch {
+        // silent
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [connected, realConnection, provider, address, setBalance, setChainId, setError, disconnect]);
+
+  const handleRefresh = async () => {
+    if (!provider || !address) return;
+    setRefreshing(true);
+    try {
+      const wei = await getBalance(provider, address);
+      setBalance(formatBalanceWeiToEth(wei));
+    } catch {
+      // ignore
+    } finally {
+      setTimeout(() => setRefreshing(false), 400);
+    }
+  };
+
+  const handleSwitchChain = async () => {
+    if (!provider) return;
+    try {
+      await ensureArcTestnet(provider);
+      const chainHex = await getChainId(provider);
+      setChainId(parseInt(chainHex, 16));
+      setError(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Không thể chuyển chain.";
+      setError(message);
+    }
+  };
 
   const handleCopy = () => {
     if (address) {
@@ -28,10 +117,7 @@ export function WalletButton() {
   if (!connected) {
     return (
       <>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="btn-primary"
-        >
+        <button onClick={() => setModalOpen(true)} className="btn-primary">
           <Wallet className="h-4 w-4" />
           <span>Connect Wallet</span>
         </button>
@@ -39,6 +125,8 @@ export function WalletButton() {
       </>
     );
   }
+
+  const symbol = isArcTestnet ? "USDC" : "ETH";
 
   return (
     <div className="relative">
@@ -54,7 +142,7 @@ export function WalletButton() {
         </div>
         <div className="hidden flex-col items-start leading-tight md:flex">
           <span className="text-xs font-semibold text-white">
-            {balance.toFixed(3)} {isArcTestnet ? "USDC" : "ETH"}
+            {balance.toFixed(3)} {symbol}
           </span>
           <span className="text-[10px] text-white/50">
             {ensName || formatAddress(address || "")}
@@ -66,23 +154,42 @@ export function WalletButton() {
       <AnimatePresence>
         {open && (
           <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setOpen(false)}
-            />
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
             <motion.div
               initial={{ opacity: 0, y: -10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95 }}
               transition={{ duration: 0.15 }}
-              className="glass-card absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden p-2"
+              className="glass-card absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden p-2"
             >
               <div className="mb-2 rounded-lg bg-gradient-to-br from-violet-500/20 via-fuchsia-500/10 to-cyan-500/20 p-4">
-                <p className="text-xs text-white/60">Total Balance</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-white/60">Total Balance</p>
+                  <button
+                    onClick={handleRefresh}
+                    disabled={refreshing}
+                    className="text-white/50 hover:text-white disabled:opacity-50"
+                    title="Làm mới số dư"
+                  >
+                    <RefreshCcw
+                      className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+                    />
+                  </button>
+                </div>
                 <p className="mt-1 font-display text-2xl font-bold text-white">
-                  {balance.toFixed(4)} <span className="text-base text-white/60">ETH</span>
+                  {balance.toFixed(4)} <span className="text-base text-white/60">{symbol}</span>
                 </p>
-                <p className="mt-0.5 text-xs text-white/50">≈ $14,247.83 USD</p>
+                <p className="mt-0.5 text-xs text-white/50">
+                  ≈ ${(balance * (isArcTestnet ? 1 : 2950)).toLocaleString(undefined, { maximumFractionDigits: 2 })} USD
+                </p>
+                {!isArcTestnet && realConnection && (
+                  <button
+                    onClick={handleSwitchChain}
+                    className="mt-3 w-full rounded-md bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/30"
+                  >
+                    Chuyển sang Arc Testnet
+                  </button>
+                )}
               </div>
 
               <button

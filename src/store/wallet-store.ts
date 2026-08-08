@@ -6,7 +6,21 @@ import type { WalletState, WalletProvider, Transaction } from "@/types";
 
 interface WalletStore extends WalletState {
   transactions: Transaction[];
+  connecting: boolean;
+  error: string | null;
+  realConnection: boolean;
   connect: (provider: WalletProvider, address: string) => void;
+  setConnection: (data: {
+    provider: WalletProvider;
+    address: string;
+    chainId: number;
+    balance: number;
+    realConnection: boolean;
+  }) => void;
+  setBalance: (balance: number) => void;
+  setChainId: (chainId: number) => void;
+  setStoreConnecting: (connecting: boolean) => void;
+  setError: (error: string | null) => void;
   disconnect: () => void;
   addTransaction: (tx: Transaction) => void;
 }
@@ -77,13 +91,16 @@ const mockTransactions: Transaction[] = [
 export const useWalletStore = create<WalletStore>()(
   persist(
     (set) => ({
-      connected: true,
-      address: "0x9F2A8B4C1D7E3F5B8A2C9D4E6F1B7A3C8E2D5F9B1",
-      provider: "metamask" as WalletProvider,
-      balance: 4.825,
-      chainId: 5042002, // Arc Testnet
-      ensName: "user.warranty.eth",
+      connected: false,
+      address: null,
+      provider: null,
+      balance: 0,
+      chainId: 1,
+      ensName: undefined,
       transactions: mockTransactions,
+      connecting: false,
+      error: null,
+      realConnection: false,
       connect: (provider, address) =>
         set({
           connected: true,
@@ -91,8 +108,25 @@ export const useWalletStore = create<WalletStore>()(
           address,
           balance: 4.825,
           chainId: 5042002,
-          ensName: "user.warranty.eth"
+          ensName: "user.warranty.eth",
+          realConnection: false,
+          error: null
         }),
+      setConnection: ({ provider, address, chainId, balance, realConnection }) =>
+        set({
+          connected: true,
+          provider,
+          address,
+          chainId,
+          balance,
+          realConnection,
+          ensName: undefined,
+          error: null
+        }),
+      setBalance: (balance) => set({ balance }),
+      setChainId: (chainId) => set({ chainId }),
+      setStoreConnecting: (connecting) => set({ connecting }),
+      setError: (error) => set({ error }),
       disconnect: () =>
         set({
           connected: false,
@@ -100,13 +134,23 @@ export const useWalletStore = create<WalletStore>()(
           provider: null,
           balance: 0,
           chainId: 1,
-          ensName: undefined
+          ensName: undefined,
+          realConnection: false,
+          error: null
         }),
       addTransaction: (tx) =>
         set((state) => ({ transactions: [tx, ...state.transactions] }))
     }),
     {
-      name: "warranty-wallet"
+      name: "warranty-wallet",
+      partialize: (state) => ({
+        connected: state.connected,
+        address: state.address,
+        chainId: state.chainId,
+        balance: state.balance,
+        ensName: state.ensName,
+        realConnection: state.realConnection
+      })
     }
   )
 );

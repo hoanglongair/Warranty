@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="eth-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#454A75"/>
+      <stop offset="100%" stop-color="#1F2238"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="32" fill="url(#eth-grad)"/>
+  <g fill="#fff">
+    <path d="M32 8L32 28.4L42.5 23.8L32 8Z" opacity="0.9"/>
+    <path d="M32 8L21.5 23.8L32 28.4L32 8Z" opacity="0.7"/>
+    <path d="M32 42.3L32 56L42.5 26.4L32 42.3Z" opacity="0.9"/>
+    <path d="M32 56L32 42.3L21.5 26.4L32 56Z" opacity="0.65"/>
+    <path d="M32 40.5L42.5 25.7L32 30.5L21.5 25.7L32 40.5Z" opacity="0.85"/>
+  </g>
+</svg>

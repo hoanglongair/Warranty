@@ -17,6 +17,7 @@ export const translations: Record<Language, Record<string, string>> = {
     "nav.wallet": "Wallet",
     "nav.settings": "Settings",
     "nav.connectWallet": "Connect Wallet",
+    "nav.faucet": "Faucet",
 
     // Hero
     "hero.badge": "Now live on Ethereum Mainnet",
@@ -441,6 +442,7 @@ export const translations: Record<Language, Record<string, string>> = {
     "nav.wallet": "Ví",
     "nav.settings": "Cài đặt",
     "nav.connectWallet": "Kết nối Ví",
+    "nav.faucet": "Faucet",
 
     // Hero
     "hero.badge": "Đã ra mắt trên Ethereum Mainnet",
@@ -865,6 +867,7 @@ export const translations: Record<Language, Record<string, string>> = {
     "nav.wallet": "钱包",
     "nav.settings": "设置",
     "nav.connectWallet": "连接钱包",
+    "nav.faucet": "水龙头",
 
     // Hero
     "hero.badge": "已在以太坊主网上线",
@@ -1289,6 +1292,7 @@ export const translations: Record<Language, Record<string, string>> = {
     "nav.wallet": "Portefeuille",
     "nav.settings": "Paramètres",
     "nav.connectWallet": "Connecter le portefeuille",
+    "nav.faucet": "Faucet",
 
     // Hero
     "hero.badge": "Maintenant en direct sur Ethereum Mainnet",
