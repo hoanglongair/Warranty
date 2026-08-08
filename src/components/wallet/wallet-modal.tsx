@@ -110,8 +110,28 @@ export function WalletModal({ open, onClose }: WalletModalProps) {
   }, [open]);
 
   useEffect(() => {
-    return () => setConnecting(false);
+    return () => setConnecting(null);
   }, [open]);
+
+  // Lock body scroll and listen to ESC key press when modal is open
+  useEffect(() => {
+    if (!open) return;
+
+    const originalStyle = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = originalStyle;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, onClose]);
 
   const handleConnect = async (walletId: WalletId) => {
     if (walletId === "walletconnect") {
@@ -198,49 +218,58 @@ export function WalletModal({ open, onClose }: WalletModalProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md transition-opacity"
             onClick={onClose}
           />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ type: "spring", duration: 0.5 }}
-              className="glass-card relative w-full max-w-md overflow-hidden p-6"
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ type: "spring", duration: 0.4 }}
+              className="glass-card relative flex max-h-[90vh] sm:max-h-[85vh] w-full max-w-md flex-col overflow-hidden p-4 sm:p-6 shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="wallet-modal-title"
             >
-              <div className="absolute -left-20 -top-20 h-60 w-60 rounded-full bg-violet-500/20 blur-3xl" />
-              <div className="absolute -bottom-20 -right-20 h-60 w-60 rounded-full bg-cyan-500/20 blur-3xl" />
+              {/* Background Glows */}
+              <div className="pointer-events-none absolute -left-20 -top-20 h-60 w-60 rounded-full bg-violet-500/20 blur-3xl" />
+              <div className="pointer-events-none absolute -bottom-20 -right-20 h-60 w-60 rounded-full bg-cyan-500/20 blur-3xl" />
 
-              <div className="relative">
-                <div className="mb-6 flex items-center justify-between">
+              {/* Modal Header */}
+              <div className="relative flex-shrink-0 pb-3 sm:pb-4 border-b border-white/5">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h2 className="font-display text-xl font-bold text-white">
+                    <h2 id="wallet-modal-title" className="font-display text-lg sm:text-xl font-bold text-white">
                       Connect Wallet
                     </h2>
-                    <p className="mt-1 text-sm text-white/60">
+                    <p className="mt-0.5 text-xs sm:text-sm text-white/60">
                       Kết nối trực tiếp với extension ví của bạn
                     </p>
                   </div>
                   <button
                     onClick={onClose}
-                    className="rounded-lg p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                    aria-label="Close connect wallet modal"
+                    className="rounded-xl p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50"
                   >
                     <X className="h-5 w-5" />
                   </button>
                 </div>
+              </div>
 
-                <div className="mb-4 flex items-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/5 p-3">
+              {/* Modal Body - Scrollable */}
+              <div className="relative flex-1 overflow-y-auto pt-3 sm:pt-4 pr-1 space-y-3 sm:space-y-4">
+                <div className="flex items-center gap-2.5 rounded-xl border border-violet-500/20 bg-violet-500/5 p-3">
                   <Shield className="h-4 w-4 flex-shrink-0 text-violet-400" />
-                  <p className="text-xs text-white/70">
+                  <p className="text-[11px] sm:text-xs text-white/70 leading-relaxed">
                     Kết nối qua chuẩn EIP-1193. Ví vẫn nằm trong tay bạn — chúng tôi không lưu khóa.
                   </p>
                 </div>
 
                 {error && (
-                  <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                  <div className="flex items-start gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 p-3">
                     <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-400" />
-                    <p className="text-xs text-red-200">{error}</p>
+                    <p className="text-xs text-red-200 leading-normal">{error}</p>
                   </div>
                 )}
 
@@ -253,43 +282,43 @@ export function WalletModal({ open, onClose }: WalletModalProps) {
                           onClick={() => handleConnect(wallet.id)}
                           disabled={connecting !== null}
                           className={cn(
-                            "group relative flex w-full items-center gap-4 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] p-4 text-left transition-all hover:border-violet-500/30 hover:bg-white/[0.06] disabled:opacity-50",
+                            "group relative flex w-full items-center gap-3 sm:gap-4 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] p-3 sm:p-4 text-left transition-all hover:border-violet-500/30 hover:bg-white/[0.06] active:scale-[0.99] disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-violet-500/40",
                             connecting === wallet.id && "border-violet-500/50 bg-violet-500/5"
                           )}
                         >
-                          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-white/10 to-white/5">
+                          <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-white/10 to-white/5 shadow-inner">
                             <Image
                               src={wallet.icon}
                               alt={wallet.name}
                               width={32}
                               height={32}
-                              className="h-8 w-8"
+                              className="h-6 w-6 sm:h-8 sm:w-8 object-contain"
                             />
                           </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-white">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                              <span className="font-semibold text-sm sm:text-base text-white truncate">
                                 {wallet.name}
                               </span>
                               {wallet.popular && (
-                                <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-300">
+                                <span className="whitespace-nowrap rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-300">
                                   Popular
                                 </span>
                               )}
                               {installed && (
-                                <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-green-300">
+                                <span className="whitespace-nowrap rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-green-300">
                                   Đã cài
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-white/50">
+                            <p className="text-[11px] sm:text-xs text-white/50 truncate mt-0.5">
                               {wallet.description}
                             </p>
                           </div>
                           {connecting === wallet.id ? (
-                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
+                            <div className="h-5 w-5 flex-shrink-0 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
                           ) : (
-                            <Zap className="h-4 w-4 text-white/30 transition-colors group-hover:text-violet-400" />
+                            <Zap className="h-4 w-4 flex-shrink-0 text-white/30 transition-colors group-hover:text-violet-400" />
                           )}
                         </button>
                         {!installed && wallet.installUrl && (
@@ -307,8 +336,11 @@ export function WalletModal({ open, onClose }: WalletModalProps) {
                     );
                   })}
                 </div>
+              </div>
 
-                <p className="mt-6 text-center text-xs text-white/40">
+              {/* Modal Footer */}
+              <div className="relative flex-shrink-0 pt-3 sm:pt-4 border-t border-white/5 text-center">
+                <p className="text-[11px] sm:text-xs text-white/40">
                   Bằng việc kết nối, bạn đồng ý với{" "}
                   <a href="#" className="text-violet-400 hover:underline">
                     Điều khoản
