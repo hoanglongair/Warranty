@@ -117,8 +117,11 @@ export function WalletButton() {
   if (!connected) {
     return (
       <>
-        <button onClick={() => setModalOpen(true)} className="btn-primary">
-          <Wallet className="h-4 w-4" />
+        <button
+          onClick={() => setModalOpen(true)}
+          className="btn-primary px-3 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm whitespace-nowrap"
+        >
+          <Wallet className="h-4 w-4 flex-shrink-0" />
           <span>Connect Wallet</span>
         </button>
         <WalletModal open={modalOpen} onClose={() => setModalOpen(false)} />

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Wallet, Shield, Zap, AlertCircle, ExternalLink } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useWalletStore } from "@/store/wallet-store";
 import { cn } from "@/lib/utils";
 import {
@@ -93,8 +94,13 @@ const wallets: Array<{
 export function WalletModal({ open, onClose }: WalletModalProps) {
   const [connecting, setConnecting] = useState<WalletId | null>(null);
   const [installedMap, setInstalledMap] = useState<Record<string, boolean>>({});
+  const [mounted, setMounted] = useState(false);
   const { connect, setConnection, setBalance, setChainId, setStoreConnecting, setError, error } =
     useWalletStore();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -210,7 +216,9 @@ export function WalletModal({ open, onClose }: WalletModalProps) {
     }
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -356,6 +364,7 @@ export function WalletModal({ open, onClose }: WalletModalProps) {
           </div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
