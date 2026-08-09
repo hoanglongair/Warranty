@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -10,12 +10,14 @@ import {
   Users,
   ChevronDown
 } from "lucide-react";
-import { jobs } from "@/data/jobs";
+import { jobs as staticJobs } from "@/data/jobs";
 import { categories } from "@/data/jobs";
 import { JobCard } from "@/components/marketplace/job-card";
 import { FreelancerCard } from "@/components/marketplace/freelancer-card";
 import { freelancers } from "@/data/freelancers";
 import { cn } from "@/lib/utils";
+import { useJobStore } from "@/store/job-store";
+import { CustomSelect } from "@/components/ui/custom-select";
 
 type Tab = "posters" | "freelancers";
 type SortBy = "newest" | "highest" | "applicants";
@@ -29,7 +31,15 @@ export default function MarketplacePage() {
   const [sortBy, setSortBy] = useState<SortBy>("newest");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const filteredJobs = jobs
+  const { jobs: apiJobs, fetchJobs, isLoading } = useJobStore();
+
+  useEffect(() => {
+    fetchJobs();
+  }, []);
+
+  const activeJobsList = apiJobs && apiJobs.length > 0 ? apiJobs : staticJobs;
+
+  const filteredJobs = activeJobsList
     .filter((job) => {
       if (search && !job.title.toLowerCase().includes(search.toLowerCase())) {
         return false;
@@ -41,9 +51,9 @@ export default function MarketplacePage() {
     })
     .sort((a, b) => {
       if (sortBy === "newest")
-        return new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime();
+        return new Date(b.postedAt || Date.now()).getTime() - new Date(a.postedAt || Date.now()).getTime();
       if (sortBy === "highest") return b.budget - a.budget;
-      return b.applicants - a.applicants;
+      return (b.applicants || 0) - (a.applicants || 0);
     });
 
   const filteredFreelancers = freelancers.filter((freelancer) => {
@@ -142,23 +152,16 @@ export default function MarketplacePage() {
             </span>
           )}
         </button>
-        <div className="relative">
-          <select
+        <div className="w-44">
+          <CustomSelect
+            options={[
+              { value: "newest", label: "Newest" },
+              { value: "highest", label: "Highest Budget" },
+              { value: "applicants", label: "Most Applicants" }
+            ]}
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortBy)}
-            className="h-11 appearance-none rounded-xl border border-white/10 bg-white/[0.04] pl-4 pr-10 text-sm text-white outline-none transition-colors focus:border-violet-500/50"
-          >
-            <option value="newest" className="bg-[hsl(var(--background))]">
-              Newest
-            </option>
-            <option value="highest" className="bg-[hsl(var(--background))]">
-              Highest Budget
-            </option>
-            <option value="applicants" className="bg-[hsl(var(--background))]">
-              Most Applicants
-            </option>
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+            onChange={(val) => setSortBy(val as SortBy)}
+          />
         </div>
       </div>
 
@@ -285,6 +288,7 @@ export default function MarketplacePage() {
             ? `${filteredJobs.length} jobs available`
             : `${filteredFreelancers.length} freelancers available`}
         </p>
+        {isLoading && <span className="text-xs text-violet-400 animate-pulse">Đang tải dữ liệu từ CSDL...</span>}
       </div>
 
       <AnimatePresence mode="wait">
@@ -297,7 +301,7 @@ export default function MarketplacePage() {
             transition={{ duration: 0.3 }}
             className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
           >
-            {filteredJobs.map((job, i) => (
+            {filteredJobs.map((job: any, i: number) => (
               <JobCard key={job.id} job={job} index={i} />
             ))}
           </motion.div>

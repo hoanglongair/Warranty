@@ -39,6 +39,13 @@ export function WalletButton() {
   const isArcTestnet = chainId === ARC_CHAIN_ID;
 
   useEffect(() => {
+    if (connected && address) {
+      // Tự động gọi API khởi tạo/đồng bộ bản ghi User trong CSDL Neon khi ví kết nối
+      fetch(`/api/profile/${address}`).catch((err) => console.error("Auto sync profile error:", err));
+    }
+  }, [connected, address]);
+
+  useEffect(() => {
     if (!connected || !realConnection || !provider) return;
     let cancelled = false;
     let unsub: (() => void) | null = null;

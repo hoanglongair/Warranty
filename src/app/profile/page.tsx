@@ -1,28 +1,70 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { 
   MapPin, Calendar, Star, Briefcase, DollarSign, Clock, 
-  CheckCircle2, ExternalLink, Edit2, Plus, Globe, Twitter, Github
+  CheckCircle2, ExternalLink, Edit2, Plus, Globe, Twitter, Github, Save, X
 } from "lucide-react";
-import { freelancers } from "@/data/freelancers";
 import { formatCurrency, formatCompactNumber } from "@/lib/utils";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { useWalletStore } from "@/store/wallet-store";
-import Link from "next/link";
-
-const currentUser = freelancers[0];
 
 export default function ProfilePage() {
-  const [activeTab, setActiveTab] = useState<"portfolio" | "reviews" | "about">("portfolio");
-  const { connected } = useWalletStore();
+  const [activeTab, setActiveTab] = useState<"portfolio" | "reviews" | "about">("about");
+  const { connected, address } = useWalletStore();
+  const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [editSkills, setEditSkills] = useState("");
 
-  const reviews = [
-    { id: "rev-1", author: "Aurora Labs", rating: 5, text: "Exceptional work! Delivered ahead of schedule with incredible attention to detail.", date: "June 2026", project: "Web3 Landing Page" },
-    { id: "rev-2", author: "Prism Studio", rating: 5, text: "Professional, creative, and highly responsive. Would definitely hire again.", date: "May 2026", project: "Brand Identity" },
-    { id: "rev-3", author: "Nebula DAO", rating: 5, text: "Outstanding design skills and great communication throughout the project.", date: "April 2026", project: "UI/UX Design" },
-  ];
+  useEffect(() => {
+    if (!connected || !address) return;
+    setLoading(true);
+    fetch(`/api/profile/${address}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.profile) {
+          setProfile(data.profile);
+          setEditName(data.profile.name || "");
+          setEditBio(data.profile.bio || "");
+          setEditSkills(Array.isArray(data.profile.skills) ? data.profile.skills.join(", ") : "");
+        }
+      })
+      .catch((err) => console.error("Fetch profile error:", err))
+      .finally(() => setLoading(false));
+  }, [connected, address]);
+
+  const handleSaveProfile = async () => {
+    if (!address) return;
+    try {
+      const skillsArray = editSkills.split(",").map((s) => s.trim()).filter(Boolean);
+      const res = await fetch(`/api/profile/${address}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editName,
+          bio: editBio,
+          skills: skillsArray
+        })
+      });
+      const data = await res.json();
+      if (data.profile) {
+        setProfile(data.profile);
+        setIsEditing(false);
+        alert("Cập nhật hồ sơ thành công!");
+      }
+    } catch (err) {
+      console.error("Save profile error:", err);
+      alert("Không thể lưu thay đổi.");
+    }
+  };
+
+  const displayName = profile?.name || (address ? `User ${address.slice(0, 6)}...${address.slice(-4)}` : "Guest User");
+  const displayBio = profile?.bio || "Thành viên hệ sinh thái Web3 Warranty Marketplace.";
+  const displaySkills = profile?.skills || ["Web3", "Smart Contract", "React"];
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -39,205 +81,131 @@ export default function ProfilePage() {
           <div className="px-8 pb-8">
             <div className="relative -mt-16 mb-6 flex flex-col items-start gap-6 sm:flex-row sm:items-end">
               <div className="flex h-32 w-32 items-center justify-center rounded-2xl border-4 border-[hsl(var(--background))] bg-gradient-to-br from-violet-500 to-cyan-500 font-display text-4xl font-bold text-white shadow-xl">
-                {currentUser.name.charAt(0)}
+                {displayName.charAt(0)}
               </div>
               
               <div className="flex-1">
-                <div className="flex items-center gap-3">
-                  <h1 className="font-display text-3xl font-bold text-white">{currentUser.name}</h1>
-                  {currentUser.verified && (
-                    <CheckCircle2 className="h-6 w-6 text-violet-400" />
-                  )}
-                </div>
-                <p className="mt-1 text-lg text-white/60">{currentUser.title}</p>
-                <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-white/50">
-                  <span className="flex items-center gap-1">
-                    <MapPin className="h-4 w-4" />
-                    {currentUser.location}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Calendar className="h-4 w-4" />
-                    Member since {currentUser.memberSince}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-4 w-4" />
-                    Replies {currentUser.responseTime}
-                  </span>
-                </div>
+                {isEditing ? (
+                  <div className="space-y-3 max-w-md">
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      placeholder="Nhập tên hiển thị"
+                      className="w-full h-10 px-3 rounded-lg border border-white/20 bg-white/10 text-white outline-none focus:border-violet-400"
+                    />
+                    <textarea
+                      value={editBio}
+                      onChange={(e) => setEditBio(e.target.value)}
+                      placeholder="Mô tả bản thân"
+                      rows={2}
+                      className="w-full p-3 rounded-lg border border-white/20 bg-white/10 text-white outline-none focus:border-violet-400 text-sm resize-none"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <h1 className="font-display text-3xl font-bold text-white">{displayName}</h1>
+                      <CheckCircle2 className="h-6 w-6 text-violet-400" />
+                    </div>
+                    <p className="mt-1 text-sm text-white/70 max-w-2xl">{displayBio}</p>
+                  </>
+                )}
               </div>
 
               <div className="flex items-center gap-3">
-                <button className="btn-secondary">
-                  <Edit2 className="h-4 w-4" />
-                  Edit Profile
-                </button>
+                {connected && (
+                  isEditing ? (
+                    <>
+                      <button onClick={handleSaveProfile} className="btn-primary flex items-center gap-1.5 text-xs py-2 px-3">
+                        <Save className="h-4 w-4" />
+                        Lưu
+                      </button>
+                      <button onClick={() => setIsEditing(false)} className="btn-secondary flex items-center gap-1.5 text-xs py-2 px-3">
+                        <X className="h-4 w-4" />
+                        Hủy
+                      </button>
+                    </>
+                  ) : (
+                    <button onClick={() => setIsEditing(true)} className="btn-secondary flex items-center gap-1.5 text-xs py-2 px-3">
+                      <Edit2 className="h-4 w-4" />
+                      Sửa Hồ Sơ
+                    </button>
+                  )
+                )}
                 <WalletButton />
               </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-3">
-              <div className="lg:col-span-2 space-y-6">
-                <div className="flex items-center gap-1 border-b border-white/5">
-                  {(["portfolio", "reviews", "about"] as const).map((tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className={`pb-3 px-4 text-sm font-medium capitalize transition-colors ${
-                        activeTab === tab ? "text-white border-b-2 border-violet-500" : "text-white/50 hover:text-white/80"
-                      }`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </div>
-
-                {activeTab === "portfolio" && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="grid gap-4 sm:grid-cols-2"
-                  >
-                    {currentUser.portfolio.map((item) => (
-                      <div key={item.id} className="group relative aspect-[4/3] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
-                        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/20 to-cyan-500/20" />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="text-center">
-                            <p className="text-lg font-semibold text-white">{item.title}</p>
-                            <p className="text-sm text-white/50 mt-1 capitalize">{item.category}</p>
-                          </div>
-                        </div>
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
-                          <button className="flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm text-white backdrop-blur">
-                            View Project
-                            <ExternalLink className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    <button className="group flex aspect-[4/3] items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-white/[0.02] transition-colors hover:border-violet-500/30 hover:bg-white/[0.04]">
-                      <div className="text-center">
-                        <Plus className="mx-auto h-8 w-8 text-white/40 group-hover:text-violet-400 transition-colors" />
-                        <p className="mt-2 text-sm text-white/40 group-hover:text-white/60 transition-colors">Add Project</p>
-                      </div>
-                    </button>
-                  </motion.div>
-                )}
-
-                {activeTab === "reviews" && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="space-y-4"
-                  >
-                    {reviews.map((review) => (
-                      <div key={review.id} className="glass-card p-6">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/20 to-cyan-500/20 font-semibold text-white">
-                              {review.author.charAt(0)}
-                            </div>
-                            <div>
-                              <p className="font-semibold text-white">{review.author}</p>
-                              <p className="text-xs text-white/50">{review.project}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {Array.from({ length: review.rating }).map((_, i) => (
-                              <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
-                            ))}
-                          </div>
-                        </div>
-                        <p className="mt-4 text-sm text-white/70">&ldquo;{review.text}&rdquo;</p>
-                        <p className="mt-3 text-xs text-white/40">{review.date}</p>
-                      </div>
-                    ))}
-                  </motion.div>
-                )}
-
-                {activeTab === "about" && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="glass-card p-6"
-                  >
-                    <h3 className="font-display text-lg font-semibold text-white mb-4">About</h3>
-                    <p className="text-sm leading-relaxed text-white/70">{currentUser.bio}</p>
-                    
-                    <div className="mt-6 flex items-center gap-3">
-                      <a href="#" className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-white/60 hover:text-white transition-colors">
-                        <Globe className="h-4 w-4" />
-                      </a>
-                      <a href="#" className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-white/60 hover:text-white transition-colors">
-                        <Twitter className="h-4 w-4" />
-                      </a>
-                      <a href="#" className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-white/60 hover:text-white transition-colors">
-                        <Github className="h-4 w-4" />
-                      </a>
-                    </div>
-                  </motion.div>
-                )}
+            {!connected ? (
+              <div className="p-8 text-center glass-card border-violet-500/30">
+                <p className="text-white/70 mb-4">Vui lòng kết nối ví để xem và chỉnh sửa hồ sơ cá nhân của bạn.</p>
+                <WalletButton />
               </div>
-
-              <div className="space-y-6">
-                <div className="glass-card p-6">
-                  <h3 className="font-display text-lg font-semibold text-white mb-4">Stats</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-3 rounded-xl bg-white/[0.03] border border-white/5">
-                      <p className="flex items-center justify-center gap-1 font-display text-xl font-bold text-white">
-                        <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                        {currentUser.rating}
-                      </p>
-                      <p className="text-xs text-white/50 mt-1">{currentUser.reviews} reviews</p>
-                    </div>
-                    <div className="text-center p-3 rounded-xl bg-white/[0.03] border border-white/5">
-                      <p className="font-display text-xl font-bold text-white">{currentUser.completedJobs}</p>
-                      <p className="text-xs text-white/50 mt-1">projects</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-white/50">Hourly Rate</span>
-                      <span className="text-white font-semibold">{formatCurrency(currentUser.hourlyRate)}/hr</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-white/50">Total Earned</span>
-                      <span className="text-white font-semibold">${formatCompactNumber(currentUser.earnings)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="glass-card p-6">
-                  <h3 className="font-display text-lg font-semibold text-white mb-4">Skills</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {currentUser.skills.map((skill) => (
-                      <span
-                        key={skill}
-                        className="rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-sm text-violet-300"
+            ) : (
+              <div className="grid gap-6 lg:grid-cols-3">
+                <div className="lg:col-span-2 space-y-6">
+                  <div className="flex items-center gap-1 border-b border-white/5">
+                    {(["about", "portfolio"] as const).map((tab) => (
+                      <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        className={`pb-3 px-4 text-sm font-medium capitalize transition-colors ${
+                          activeTab === tab ? "text-white border-b-2 border-violet-500" : "text-white/50 hover:text-white/80"
+                        }`}
                       >
-                        {skill}
-                      </span>
+                        {tab}
+                      </button>
                     ))}
                   </div>
+
+                  {activeTab === "about" && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="glass-card p-6 space-y-4"
+                    >
+                      <h3 className="font-display text-lg font-semibold text-white">Giới Thiệu</h3>
+                      <p className="text-sm leading-relaxed text-white/70">{displayBio}</p>
+
+                      {isEditing && (
+                        <div className="pt-4 border-t border-white/10">
+                          <label className="block text-xs text-white/60 mb-2">Kỹ năng (phân cách bằng dấu phẩy)</label>
+                          <input
+                            type="text"
+                            value={editSkills}
+                            onChange={(e) => setEditSkills(e.target.value)}
+                            placeholder="Solidity, React, UI/UX"
+                            className="w-full h-10 px-3 rounded-lg border border-white/20 bg-white/10 text-white text-sm outline-none focus:border-violet-400"
+                          />
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
                 </div>
 
-                <div className="glass-card p-6">
-                  <h3 className="font-display text-lg font-semibold text-white mb-4">Badges</h3>
-                  <div className="space-y-2">
-                    {currentUser.badges.map((badge) => (
-                      <div key={badge} className="flex items-center gap-2 text-sm">
-                        <CheckCircle2 className="h-4 w-4 text-violet-400" />
-                        <span className="text-white/70">{badge}</span>
-                      </div>
-                    ))}
+                <div className="space-y-6">
+                  <div className="glass-card p-6">
+                    <h3 className="font-display text-lg font-semibold text-white mb-4">Ví Đang Kết Nối</h3>
+                    <p className="text-xs text-violet-300 font-mono break-all bg-violet-500/10 p-3 rounded-xl border border-violet-500/20">{address}</p>
                   </div>
-                </div>
 
-                <div className="glass-card p-6">
-                  <h3 className="font-display text-lg font-semibold text-white mb-4">Wallet</h3>
-                  <p className="text-xs text-white/40 font-mono break-all">{currentUser.walletAddress}</p>
+                  <div className="glass-card p-6">
+                    <h3 className="font-display text-lg font-semibold text-white mb-4">Kỹ Năng</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {displaySkills.map((skill: string) => (
+                        <span
+                          key={skill}
+                          className="rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-sm text-violet-300"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </motion.div>

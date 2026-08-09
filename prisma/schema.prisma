@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CLIENT
+  FREELANCER
+  BOTH
+}
+
+enum JobStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum ContractStatus {
+  CREATED
+  FUNDED
+  IN_PROGRESS
+  DISPUTED
+  COMPLETED
+  REFUNDED
+}
+
+model User {
+  walletAddress String        @id @map("wallet_address")
+  role          Role          @default(BOTH)
+  name          String?
+  email         String?
+  avatar        String?
+  bio           String?
+  skills        String[]      @default([])
+  rating        Float         @default(5.0)
+  totalEarned   Float         @default(0) @map("total_earned")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  postedJobs    Job[]         @relation("ClientJobs")
+  applications  Application[] @relation("FreelancerApplications")
+  clientContracts Contract[]  @relation("ClientContracts")
+  freelancerContracts Contract[] @relation("FreelancerContracts")
+
+  @@map("users")
+}
+
+model Job {
+  id            String      @id @default(cuid())
+  title         String
+  description   String
+  category      String
+  budget        Float
+  budgetType    String      @default("fixed") @map("budget_type") // fixed / hourly
+  tokenSymbol   String      @default("ETH") @map("token_symbol")
+  status        JobStatus   @default(OPEN)
+  location      String      @default("Remote")
+  deadline      String?
+  skills        String[]    @default([])
+  requirements  String[]    @default([])
+  deliverables  String[]    @default([])
+  clientAddress String      @map("client_address")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  client        User        @relation("ClientJobs", fields: [clientAddress], references: [walletAddress], onDelete: Cascade)
+  applications  Application[]
+  contract      Contract?
+
+  @@map("jobs")
+}
+
+model Application {
+  id                String            @id @default(cuid())
+  jobId             String            @map("job_id")
+  freelancerAddress String            @map("freelancer_address")
+  proposalBid       Float             @map("proposal_bid")
+  coverLetter       String            @map("cover_letter")
+  estimatedDays     Int               @default(7) @map("estimated_days")
+  status            ApplicationStatus @default(PENDING)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  job               Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  freelancer        User              @relation("FreelancerApplications", fields: [freelancerAddress], references: [walletAddress], onDelete: Cascade)
+
+  @@map("applications")
+}
+
+model Contract {
+  id                String         @id @default(cuid())
+  jobId             String         @unique @map("job_id")
+  escrowAddress     String?        @map("escrow_address")
+  clientAddress     String         @map("client_address")
+  freelancerAddress String         @map("freelancer_address")
+  totalAmount       Float          @map("total_amount")
+  tokenSymbol       String         @default("ETH") @map("token_symbol")
+  status            ContractStatus @default(CREATED)
+  txHash            String?        @map("tx_hash")
+  arbitratorAddress String?        @map("arbitrator_address")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  job               Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  client            User           @relation("ClientContracts", fields: [clientAddress], references: [walletAddress])
+  freelancer        User           @relation("FreelancerContracts", fields: [freelancerAddress], references: [walletAddress])
+
+  @@map("contracts")
+}

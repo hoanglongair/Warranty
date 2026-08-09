@@ -1,20 +1,54 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Briefcase, Users, DollarSign, Clock, MapPin, Star, CheckCircle2, Calendar, ArrowRight, Share2 } from "lucide-react";
-import { jobs } from "@/data/jobs";
+import { Briefcase, Users, DollarSign, Clock, MapPin, Star, CheckCircle2, Calendar, ArrowRight, Share2, Loader2 } from "lucide-react";
+import { jobs as staticJobs } from "@/data/jobs";
 import { formatCurrency } from "@/lib/utils";
 import { useWalletStore } from "@/store/wallet-store";
 import { WalletButton } from "@/components/wallet/wallet-button";
+import { CustomSelect } from "@/components/ui/custom-select";
 
 interface JobDetailsClientProps {
   id: string;
 }
 
 export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
-  const job = jobs.find((j) => j.id === jobId);
-  const { connected } = useWalletStore();
+  const { connected, address } = useWalletStore();
+  const [job, setJob] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [deliveryTime, setDeliveryTime] = useState("7");
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/jobs/${jobId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.job) {
+          setJob(data.job);
+        } else {
+          // Fallback static job
+          const fallback = staticJobs.find((j) => j.id === jobId);
+          setJob(fallback || null);
+        }
+      })
+      .catch((err) => {
+        console.error("Fetch job error:", err);
+        const fallback = staticJobs.find((j) => j.id === jobId);
+        setJob(fallback || null);
+      })
+      .finally(() => setLoading(false));
+  }, [jobId]);
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-24 text-center">
+        <Loader2 className="h-8 w-8 animate-spin mx-auto text-violet-400 mb-4" />
+        <p className="text-white/60">Đang tải thông tin chi tiết công việc...</p>
+      </div>
+    );
+  }
 
   if (!job) {
     return (
@@ -28,7 +62,19 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
     );
   }
 
-  const similarJobs = jobs.filter((j) => j.category === job.category && j.id !== job.id).slice(0, 3);
+  const similarJobs = staticJobs.filter((j) => j.category === job.category && j.id !== job.id).slice(0, 3);
+  const employer = job.employer || {
+    name: job.client?.name || (job.clientAddress ? `User ${job.clientAddress.slice(0, 6)}...` : "Client"),
+    company: "Decentralized Client",
+    rating: 5.0,
+    reviews: 12,
+    jobsPosted: 1,
+    location: job.location || "Remote",
+    memberSince: "2024",
+    totalSpent: job.budget || 0,
+    walletAddress: job.clientAddress || address || "",
+    verified: true
+  };
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -55,7 +101,7 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
                   <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${getCategoryBg(job.category)}`}>
                     <span className="capitalize">{job.category}</span>
                   </span>
-                  <span className="text-xs text-white/50">{job.subcategory}</span>
+                  <span className="text-xs text-white/50">{job.subcategory || job.category}</span>
                 </div>
                 <h1 className="font-display text-3xl font-bold text-white">
                   {job.title}
@@ -73,27 +119,27 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4" />
-                <span>{job.duration}</span>
+                <span>{job.duration || job.deadline || "1-2 weeks"}</span>
               </div>
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
-                <span className="capitalize">{job.type}</span>
+                <span className="capitalize">{job.type || job.location || "remote"}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
-                <span>Due {new Date(job.deadline).toLocaleDateString()}</span>
+                <span>Due {new Date(job.deadline || Date.now()).toLocaleDateString()}</span>
               </div>
             </div>
 
             <div className="mt-8">
               <h2 className="font-display text-lg font-bold text-white">About This Project</h2>
-              <p className="mt-4 leading-relaxed text-white/70">{job.longDescription}</p>
+              <p className="mt-4 leading-relaxed text-white/70 whitespace-pre-line">{job.longDescription || job.description}</p>
             </div>
 
             <div className="mt-8">
               <h2 className="font-display text-lg font-bold text-white">Required Skills</h2>
               <div className="mt-4 flex flex-wrap gap-2">
-                {job.skills.map((skill) => (
+                {(job.skills || []).map((skill: string) => (
                   <span
                     key={skill}
                     className="rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-sm text-violet-300"
@@ -104,31 +150,35 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
               </div>
             </div>
 
-            <div className="mt-8">
-              <h2 className="font-display text-lg font-bold text-white">Requirements</h2>
-              <ul className="mt-4 space-y-3">
-                {job.requirements.map((req, i) => (
-                  <li key={i} className="flex items-start gap-3 text-sm text-white/70">
-                    <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-violet-400 mt-0.5" />
-                    {req}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {job.requirements && job.requirements.length > 0 && (
+              <div className="mt-8">
+                <h2 className="font-display text-lg font-bold text-white">Requirements</h2>
+                <ul className="mt-4 space-y-3">
+                  {job.requirements.map((req: string, i: number) => (
+                    <li key={i} className="flex items-start gap-3 text-sm text-white/70">
+                      <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-violet-400 mt-0.5" />
+                      {req}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-            <div className="mt-8">
-              <h2 className="font-display text-lg font-bold text-white">Deliverables</h2>
-              <ul className="mt-4 space-y-3">
-                {job.deliverables.map((del, i) => (
-                  <li key={i} className="flex items-start gap-3 text-sm text-white/70">
-                    <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/20 to-cyan-500/20 text-[10px] font-bold text-violet-300">
-                      {i + 1}
-                    </div>
-                    {del}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {job.deliverables && job.deliverables.length > 0 && (
+              <div className="mt-8">
+                <h2 className="font-display text-lg font-bold text-white">Deliverables</h2>
+                <ul className="mt-4 space-y-3">
+                  {job.deliverables.map((del: string, i: number) => (
+                    <li key={i} className="flex items-start gap-3 text-sm text-white/70">
+                      <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/20 to-cyan-500/20 text-[10px] font-bold text-violet-300">
+                        {i + 1}
+                      </div>
+                      {del}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </motion.div>
 
           <motion.div
@@ -183,21 +233,21 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
                   </p>
                 </div>
               ) : (
-                <button className="btn-primary w-full">
+                <a href="#proposal-form" className="btn-primary w-full text-center block">
                   Apply Now
-                </button>
+                </a>
               )}
             </div>
 
             <div className="mt-6 flex items-center justify-center gap-4 text-sm text-white/50">
               <div className="flex items-center gap-1">
                 <Users className="h-4 w-4" />
-                <span>{job.applicants} applicants</span>
+                <span>{job.applicants ?? (job.proposals?.length || 0)} applicants</span>
               </div>
               <span>·</span>
               <div className="flex items-center gap-1">
                 <Clock className="h-4 w-4" />
-                <span>{job.duration}</span>
+                <span>{job.duration || "1-2 weeks"}</span>
               </div>
             </div>
           </motion.div>
@@ -212,16 +262,14 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
             
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 font-bold text-white">
-                {job.employer.name.charAt(0)}
+                {employer.name.charAt(0)}
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="font-semibold text-white">{job.employer.name}</p>
-                  {job.employer.verified && (
-                    <CheckCircle2 className="h-4 w-4 text-violet-400" />
-                  )}
+                  <p className="font-semibold text-white">{employer.name}</p>
+                  <CheckCircle2 className="h-4 w-4 text-violet-400" />
                 </div>
-                <p className="text-xs text-white/50">{job.employer.company}</p>
+                <p className="text-xs text-white/50">{employer.company}</p>
               </div>
             </div>
 
@@ -229,12 +277,12 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
               <div className="text-center p-3 rounded-xl bg-white/[0.03] border border-white/5">
                 <p className="flex items-center justify-center gap-1 font-semibold text-white">
                   <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                  {job.employer.rating}
+                  {employer.rating || 5.0}
                 </p>
-                <p className="text-xs text-white/50 mt-1">{job.employer.reviews} reviews</p>
+                <p className="text-xs text-white/50 mt-1">{employer.reviews || 12} reviews</p>
               </div>
               <div className="text-center p-3 rounded-xl bg-white/[0.03] border border-white/5">
-                <p className="font-semibold text-white">{job.employer.jobsPosted}</p>
+                <p className="font-semibold text-white">{employer.jobsPosted || 1}</p>
                 <p className="text-xs text-white/50 mt-1">Jobs posted</p>
               </div>
             </div>
@@ -242,24 +290,27 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
             <div className="mt-4 space-y-2 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-white/50">Location</span>
-                <span className="text-white">{job.employer.location}</span>
+                <span className="text-white">{employer.location || "Global"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-white/50">Member since</span>
-                <span className="text-white">{job.employer.memberSince}</span>
+                <span className="text-white">{employer.memberSince || "2024"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-white/50">Total spent</span>
-                <span className="text-white">${(job.employer.totalSpent / 1000).toFixed(0)}K+</span>
+                <span className="text-white">${((employer.totalSpent || job.budget || 0) / 1000).toFixed(0)}K+</span>
               </div>
             </div>
 
-            <div className="mt-6">
-              <p className="text-xs text-white/40 font-mono truncate">{job.employer.walletAddress}</p>
-            </div>
+            {employer.walletAddress && (
+              <div className="mt-6">
+                <p className="text-xs text-white/40 font-mono truncate">{employer.walletAddress}</p>
+              </div>
+            )}
           </motion.div>
 
           <motion.div
+            id="proposal-form"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
@@ -269,13 +320,50 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
             <p className="text-sm text-white/60 mb-4">
               Submit your proposal to apply for this job. Include your approach, timeline, and relevant experience.
             </p>
-            <div className="space-y-4">
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!connected || !address) {
+                  alert("Vui lòng kết nối ví để nộp đơn ứng tuyển.");
+                  return;
+                }
+                const formData = new FormData(e.currentTarget);
+                const bid = formData.get("bid");
+                const coverLetter = formData.get("coverLetter");
+                const deliveryTime = formData.get("deliveryTime");
+
+                try {
+                  const res = await fetch(`/api/jobs/${jobId}/apply`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      freelancerAddress: address,
+                      proposalBid: Number(bid || job.budget),
+                      coverLetter: coverLetter || "Tôi rất hứng thú với công việc này và muốn ứng tuyển.",
+                      estimatedDays: Number(deliveryTime || 7)
+                    })
+                  });
+                  const data = await res.json();
+                  if (res.ok && data.success) {
+                    alert("Gửi đơn ứng tuyển thành công!");
+                  } else {
+                    alert(data.error || "Không thể gửi đơn ứng tuyển.");
+                  }
+                } catch (err) {
+                  console.error("Apply error:", err);
+                  alert("Lỗi kết nối khi nộp đơn.");
+                }
+              }}
+              className="space-y-4"
+            >
               <div>
-                <label className="block text-xs font-medium text-white/60 mb-2">Your Bid</label>
+                <label className="block text-xs font-medium text-white/60 mb-2">Your Bid ($)</label>
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
                   <input
+                    name="bid"
                     type="number"
+                    defaultValue={job.budget}
                     placeholder="Enter amount"
                     className="w-full h-11 rounded-xl border border-white/10 bg-white/[0.04] pl-10 pr-4 text-sm text-white placeholder-white/40 outline-none focus:border-violet-500/50"
                   />
@@ -284,25 +372,38 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
               <div>
                 <label className="block text-xs font-medium text-white/60 mb-2">Cover Letter</label>
                 <textarea
+                  name="coverLetter"
                   placeholder="Describe your approach and why you're the best fit..."
                   rows={4}
+                  required
                   className="w-full rounded-xl border border-white/10 bg-white/[0.04] p-4 text-sm text-white placeholder-white/40 outline-none focus:border-violet-500/50 resize-none"
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-white/60 mb-2">Delivery Time</label>
-                <select className="w-full h-11 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none focus:border-violet-500/50">
-                  <option value="">Select delivery time</option>
-                  <option value="1">1 week</option>
-                  <option value="2">2 weeks</option>
-                  <option value="3">3 weeks</option>
-                  <option value="4">1 month</option>
-                </select>
+                <CustomSelect
+                  options={[
+                    { value: "7", label: "1 week" },
+                    { value: "14", label: "2 weeks" },
+                    { value: "21", label: "3 weeks" },
+                    { value: "30", label: "1 month" }
+                  ]}
+                  value={deliveryTime}
+                  onChange={(val) => setDeliveryTime(val)}
+                />
+                <input type="hidden" name="deliveryTime" value={deliveryTime} />
               </div>
-              <button className="btn-primary w-full">
-                Submit Proposal
-              </button>
-            </div>
+              {!connected ? (
+                <div className="space-y-2">
+                  <WalletButton />
+                  <p className="text-xs text-center text-white/50">Connect wallet to submit proposal</p>
+                </div>
+              ) : (
+                <button type="submit" className="btn-primary w-full">
+                  Submit Proposal
+                </button>
+              )}
+            </form>
           </motion.div>
         </div>
       </div>

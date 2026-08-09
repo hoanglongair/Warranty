@@ -15,11 +15,11 @@ import { formatCurrency, timeAgo, getCategoryBg } from "@/lib/utils";
 import { useJobStore } from "@/store/job-store";
 
 interface JobCardProps {
-  job: Job;
+  job: Job | any;
   index?: number;
 }
 
-const experienceLabels = {
+const experienceLabels: Record<string, string> = {
   entry: "Entry",
   intermediate: "Intermediate",
   expert: "Expert"
@@ -28,6 +28,14 @@ const experienceLabels = {
 export function JobCard({ job, index = 0 }: JobCardProps) {
   const { bookmarkedJobs, bookmarkJob, unbookmarkJob } = useJobStore();
   const isBookmarked = bookmarkedJobs.includes(job.id);
+
+  const employerName = job.employer?.name || job.client?.name || (job.clientAddress ? `User ${job.clientAddress.slice(0, 6)}...` : "Client");
+  const employerRating = job.employer?.rating || 5.0;
+  const employerJobs = job.employer?.jobsPosted || 1;
+  const experienceText = experienceLabels[job.experience] || "Intermediate";
+  const durationText = job.duration || job.deadline || "1-2 weeks";
+  const postedAtText = job.postedAt || job.createdAt || new Date().toISOString();
+  const applicantsCount = job.applicants ?? (job.applications ? job.applications.length : 0);
 
   return (
     <motion.div
@@ -83,7 +91,7 @@ export function JobCard({ job, index = 0 }: JobCardProps) {
             </p>
 
             <div className="mt-4 flex flex-wrap gap-1.5">
-              {job.skills.slice(0, 3).map((skill) => (
+              {(job.skills || []).slice(0, 3).map((skill: string) => (
                 <span
                   key={skill}
                   className="rounded-md border border-white/5 bg-white/[0.03] px-2 py-0.5 text-[11px] text-white/70"
@@ -91,9 +99,9 @@ export function JobCard({ job, index = 0 }: JobCardProps) {
                   {skill}
                 </span>
               ))}
-              {job.skills.length > 3 && (
+              {(job.skills || []).length > 3 && (
                 <span className="rounded-md border border-white/5 bg-white/[0.03] px-2 py-0.5 text-[11px] text-white/50">
-                  +{job.skills.length - 3}
+                  +{(job.skills || []).length - 3}
                 </span>
               )}
             </div>
@@ -108,7 +116,7 @@ export function JobCard({ job, index = 0 }: JobCardProps) {
               <div className="text-right">
                 <p className="text-xs text-white/40">Applicants</p>
                 <p className="font-display text-lg font-bold text-white">
-                  {job.applicants}
+                  {applicantsCount}
                 </p>
               </div>
             </div>
@@ -117,35 +125,33 @@ export function JobCard({ job, index = 0 }: JobCardProps) {
               <div className="flex items-center gap-3">
                 <span className="flex items-center gap-1">
                   <Briefcase className="h-3 w-3" />
-                  {experienceLabels[job.experience]}
+                  {experienceText}
                 </span>
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  {job.duration}
+                  {durationText}
                 </span>
               </div>
               <span className="flex items-center gap-1">
                 <Users className="h-3 w-3" />
-                {timeAgo(job.postedAt)}
+                {timeAgo(postedAtText)}
               </span>
             </div>
 
             <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
               <div className="flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 text-[10px] font-bold text-white">
-                  {job.employer.name.charAt(0)}
+                  {employerName.charAt(0)}
                 </div>
                 <div>
                   <div className="flex items-center gap-1">
                     <p className="text-xs font-medium text-white">
-                      {job.employer.name}
+                      {employerName}
                     </p>
-                    {job.employer.verified && (
-                      <CheckCircle2 className="h-3 w-3 text-violet-400" />
-                    )}
+                    <CheckCircle2 className="h-3 w-3 text-violet-400" />
                   </div>
                   <p className="text-[10px] text-white/40">
-                    ★ {job.employer.rating} · {job.employer.jobsPosted} jobs
+                    ★ {employerRating} · {employerJobs} jobs
                   </p>
                 </div>
               </div>

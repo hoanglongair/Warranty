@@ -6,9 +6,11 @@ import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowRight, Upload, Plus, X, Check } from "lucide-react";
+import { ArrowRight, Upload, Plus, X, Check, CheckCircle2 } from "lucide-react";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { useWalletStore } from "@/store/wallet-store";
+import { useJobStore } from "@/store/job-store";
+import { CustomSelect } from "@/components/ui/custom-select";
 
 const jobSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters"),
@@ -37,10 +39,24 @@ const experienceLevels = ["Entry", "Intermediate", "Expert"];
 export default function PostJobPage() {
   const [skills, setSkills] = useState<string[]>([]);
   const [skillInput, setSkillInput] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
+  
+  const [requirements, setRequirements] = useState<string[]>([
+    "Kinh nghiệm làm việc Web3 / Software Development",
+    "Giao tiếp tốt và bàn giao công việc đúng thời hạn",
+    "Cam kết hoàn thành theo yêu cầu mô tả dự án"
+  ]);
+  const [reqInput, setReqInput] = useState("");
+
+  const [deliverables, setDeliverables] = useState<string[]>([
+    "Mã nguồn dự án hoàn chỉnh",
+    "Báo cáo hoặc tài liệu hướng dẫn bàn giao"
+  ]);
+  const [delInput, setDelInput] = useState("");
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const { connected } = useWalletStore();
+  const { addJob } = useJobStore();
+  const { connected, address } = useWalletStore();
 
   const { register, handleSubmit, formState: { errors }, setValue, watch, reset } = useForm<JobFormData>({
     resolver: zodResolver(jobSchema),
@@ -48,34 +64,95 @@ export default function PostJobPage() {
       skills: [],
       budget: 500,
       type: "remote",
+      category: "",
+      subcategory: "",
+      duration: "",
+      experience: ""
     }
   });
 
-  const selectedSubcategories = categories.find(c => c.id === selectedCategory)?.subcategories || [];
+  const selectedCategory = watch("category");
+  const selectedSubcategory = watch("subcategory");
+  const selectedDuration = watch("duration");
+  const selectedExperience = watch("experience");
+  const selectedType = watch("type");
+
+  const categoryOptions = categories.map((cat) => ({ value: cat.id, label: cat.name }));
+  const subcategoryList = categories.find((c) => c.id === selectedCategory)?.subcategories || [];
+  const subcategoryOptions = subcategoryList.map((sub) => ({ value: sub, label: sub }));
+  const durationOptions = durations.map((dur) => ({ value: dur, label: dur }));
+  const experienceOptions = experienceLevels.map((exp) => ({ value: exp.toLowerCase(), label: exp }));
+  const jobTypeOptions = [
+    { value: "remote", label: "Remote" },
+    { value: "onsite", label: "On-site" },
+    { value: "hybrid", label: "Hybrid" }
+  ];
 
   const addSkill = () => {
     if (skillInput.trim() && !skills.includes(skillInput.trim())) {
       const newSkills = [...skills, skillInput.trim()];
       setSkills(newSkills);
-      setValue("skills", newSkills);
+      setValue("skills", newSkills, { shouldValidate: true });
       setSkillInput("");
     }
   };
 
   const removeSkill = (skill: string) => {
-    const newSkills = skills.filter(s => s !== skill);
+    const newSkills = skills.filter((s) => s !== skill);
     setSkills(newSkills);
-    setValue("skills", newSkills);
+    setValue("skills", newSkills, { shouldValidate: true });
+  };
+
+  const addRequirement = () => {
+    if (reqInput.trim() && !requirements.includes(reqInput.trim())) {
+      setRequirements([...requirements, reqInput.trim()]);
+      setReqInput("");
+    }
+  };
+
+  const removeRequirement = (index: number) => {
+    setRequirements(requirements.filter((_, i) => i !== index));
+  };
+
+  const addDeliverable = () => {
+    if (delInput.trim() && !deliverables.includes(delInput.trim())) {
+      setDeliverables([...deliverables, delInput.trim()]);
+      setDelInput("");
+    }
+  };
+
+  const removeDeliverable = (index: number) => {
+    setDeliverables(deliverables.filter((_, i) => i !== index));
   };
 
   const onSubmit = async (data: JobFormData) => {
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    console.log("Job posted:", data);
-    setIsSubmitting(false);
-    setSubmitted(true);
-    reset();
-    setSkills([]);
+    try {
+      const newJobObj = {
+        id: `job-${Date.now()}`,
+        title: data.title,
+        description: data.description,
+        category: data.category,
+        budget: data.budget,
+        budgetType: "fixed",
+        tokenSymbol: "ETH",
+        clientAddress: address || "0x9F2A8B4C1D7E3F5B8A2C9D4E6F1B7A3C8E2D5F9B1",
+        skills: data.skills,
+        requirements: requirements,
+        deliverables: deliverables,
+        deadline: data.duration,
+        location: data.type
+      };
+
+      await addJob(newJobObj as any);
+      setIsSubmitting(false);
+      setSubmitted(true);
+      reset();
+      setSkills([]);
+    } catch (err) {
+      console.error("Job submit error:", err);
+      setIsSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -115,13 +192,24 @@ export default function PostJobPage() {
         animate={{ opacity: 1, y: 0 }}
         className="mb-8"
       >
-        <h1 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
-          <span className="gradient-text">Post a Job</span>
-        </h1>
-        <p className="mt-3 max-w-2xl text-lg text-white/60">
-          Find the perfect freelancer for your project. Describe your requirements and budget.
+        <h1 className="font-display text-4xl font-bold text-white">Post a Job</h1>
+        <p className="mt-2 text-white/60">
+          Create a new job listing to find talented freelancers for your project.
         </p>
       </motion.div>
+
+      {!connected && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-card mb-8 border-amber-500/20 bg-amber-500/5 p-6 text-center"
+        >
+          <p className="text-amber-200 mb-4">
+            You need to connect your wallet before posting a job.
+          </p>
+          <WalletButton />
+        </motion.div>
+      )}
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -129,22 +217,15 @@ export default function PostJobPage() {
         transition={{ delay: 0.1 }}
         className="glass-card p-8"
       >
-        {!connected && (
-          <div className="mb-8 rounded-xl border border-violet-500/20 bg-gradient-to-r from-violet-500/10 to-cyan-500/10 p-6 text-center">
-            <p className="text-white/70 mb-4">Connect your wallet to post a job</p>
-            <WalletButton />
-          </div>
-        )}
-
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
           <div>
             <label className="block text-sm font-medium text-white mb-2">
-              Job Title
+              Job Title <span className="text-violet-400">*</span>
             </label>
             <input
               {...register("title")}
               type="text"
-              placeholder="e.g., Web3 Landing Page Design"
+              placeholder="e.g. Build a Web3 DeFi Dashboard with React and Tailwind"
               className="w-full h-12 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white placeholder-white/40 outline-none focus:border-violet-500/50"
             />
             {errors.title && (
@@ -154,7 +235,7 @@ export default function PostJobPage() {
 
           <div>
             <label className="block text-sm font-medium text-white mb-2">
-              Job Description
+              Description <span className="text-violet-400">*</span>
             </label>
             <textarea
               {...register("description")}
@@ -170,21 +251,17 @@ export default function PostJobPage() {
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
               <label className="block text-sm font-medium text-white mb-2">
-                Category
+                Category <span className="text-violet-400">*</span>
               </label>
-              <select
-                {...register("category")}
-                onChange={(e) => {
-                  setSelectedCategory(e.target.value);
-                  setValue("category", e.target.value);
+              <CustomSelect
+                options={categoryOptions}
+                value={selectedCategory}
+                placeholder="Select category"
+                onChange={(val) => {
+                  setValue("category", val, { shouldValidate: true });
+                  setValue("subcategory", "", { shouldValidate: true });
                 }}
-                className="w-full h-12 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white outline-none focus:border-violet-500/50"
-              >
-                <option value="">Select category</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
+              />
               {errors.category && (
                 <p className="mt-1 text-xs text-red-400">{errors.category.message}</p>
               )}
@@ -192,18 +269,15 @@ export default function PostJobPage() {
 
             <div>
               <label className="block text-sm font-medium text-white mb-2">
-                Subcategory
+                Subcategory <span className="text-violet-400">*</span>
               </label>
-              <select
-                {...register("subcategory")}
+              <CustomSelect
+                options={subcategoryOptions}
+                value={selectedSubcategory}
+                placeholder="Select subcategory"
                 disabled={!selectedCategory}
-                className="w-full h-12 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white outline-none focus:border-violet-500/50 disabled:opacity-50"
-              >
-                <option value="">Select subcategory</option>
-                {selectedSubcategories.map((sub) => (
-                  <option key={sub} value={sub}>{sub}</option>
-                ))}
-              </select>
+                onChange={(val) => setValue("subcategory", val, { shouldValidate: true })}
+              />
               {errors.subcategory && (
                 <p className="mt-1 text-xs text-red-400">{errors.subcategory.message}</p>
               )}
@@ -211,7 +285,7 @@ export default function PostJobPage() {
 
             <div>
               <label className="block text-sm font-medium text-white mb-2">
-                Budget (USD)
+                Budget (USD) <span className="text-violet-400">*</span>
               </label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40">$</span>
@@ -230,17 +304,14 @@ export default function PostJobPage() {
 
             <div>
               <label className="block text-sm font-medium text-white mb-2">
-                Duration
+                Duration <span className="text-violet-400">*</span>
               </label>
-              <select
-                {...register("duration")}
-                className="w-full h-12 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white outline-none focus:border-violet-500/50"
-              >
-                <option value="">Select duration</option>
-                {durations.map((dur) => (
-                  <option key={dur} value={dur}>{dur}</option>
-                ))}
-              </select>
+              <CustomSelect
+                options={durationOptions}
+                value={selectedDuration}
+                placeholder="Select duration"
+                onChange={(val) => setValue("duration", val, { shouldValidate: true })}
+              />
               {errors.duration && (
                 <p className="mt-1 text-xs text-red-400">{errors.duration.message}</p>
               )}
@@ -248,17 +319,14 @@ export default function PostJobPage() {
 
             <div>
               <label className="block text-sm font-medium text-white mb-2">
-                Experience Level
+                Experience Level <span className="text-violet-400">*</span>
               </label>
-              <select
-                {...register("experience")}
-                className="w-full h-12 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white outline-none focus:border-violet-500/50"
-              >
-                <option value="">Select level</option>
-                {experienceLevels.map((level) => (
-                  <option key={level} value={level.toLowerCase()}>{level}</option>
-                ))}
-              </select>
+              <CustomSelect
+                options={experienceOptions}
+                value={selectedExperience}
+                placeholder="Select experience"
+                onChange={(val) => setValue("experience", val, { shouldValidate: true })}
+              />
               {errors.experience && (
                 <p className="mt-1 text-xs text-red-400">{errors.experience.message}</p>
               )}
@@ -266,81 +334,169 @@ export default function PostJobPage() {
 
             <div>
               <label className="block text-sm font-medium text-white mb-2">
-                Job Type
+                Job Type <span className="text-violet-400">*</span>
               </label>
-              <select
-                {...register("type")}
-                className="w-full h-12 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white outline-none focus:border-violet-500/50"
-              >
-                <option value="remote">Remote</option>
-                <option value="hybrid">Hybrid</option>
-                <option value="onsite">On-site</option>
-              </select>
+              <CustomSelect
+                options={jobTypeOptions}
+                value={selectedType}
+                placeholder="Select job type"
+                onChange={(val) => setValue("type", val, { shouldValidate: true })}
+              />
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-white mb-2">
-              Required Skills
+              Skills Required <span className="text-violet-400">*</span>
             </label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 mb-3">
               <input
                 type="text"
                 value={skillInput}
                 onChange={(e) => setSkillInput(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addSkill())}
-                placeholder="Type a skill and press Enter"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addSkill();
+                  }
+                }}
+                placeholder="e.g. React, Solidity, Figma"
                 className="flex-1 h-12 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white placeholder-white/40 outline-none focus:border-violet-500/50"
               />
               <button
                 type="button"
                 onClick={addSkill}
-                className="h-12 px-4 rounded-xl border border-white/10 bg-white/[0.04] text-white/60 hover:text-white transition-colors"
+                className="btn-secondary px-6"
               >
-                <Plus className="h-5 w-5" />
+                <Plus className="h-4 w-4" />
+                Add
               </button>
             </div>
-            {skills.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {skills.map((skill) => (
-                  <span
-                    key={skill}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-sm text-violet-300"
+            <div className="flex flex-wrap gap-2">
+              {skills.map((skill) => (
+                <span
+                  key={skill}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-sm text-violet-300"
+                >
+                  {skill}
+                  <button
+                    type="button"
+                    onClick={() => removeSkill(skill)}
+                    className="hover:text-white"
                   >
-                    {skill}
-                    <button
-                      type="button"
-                      onClick={() => removeSkill(skill)}
-                      className="hover:text-white"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              ))}
+            </div>
             {errors.skills && (
               <p className="mt-1 text-xs text-red-400">{errors.skills.message}</p>
             )}
           </div>
 
-          <div className="pt-4">
+          {/* Section: Requirements */}
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">
+              Requirements (Yêu cầu công việc)
+            </label>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={reqInput}
+                onChange={(e) => setReqInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addRequirement();
+                  }
+                }}
+                placeholder="e.g. 3+ năm kinh nghiệm phát triển Web3"
+                className="flex-1 h-12 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white placeholder-white/40 outline-none focus:border-violet-500/50"
+              />
+              <button
+                type="button"
+                onClick={addRequirement}
+                className="btn-secondary px-6"
+              >
+                <Plus className="h-4 w-4" />
+                Thêm
+              </button>
+            </div>
+            <ul className="space-y-2">
+              {requirements.map((req, idx) => (
+                <li key={idx} className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] p-3 text-sm text-white/80">
+                  <span className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-violet-400" />
+                    {req}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeRequirement(idx)}
+                    className="text-white/40 hover:text-red-400"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Section: Deliverables */}
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">
+              Deliverables (Sản phẩm bàn giao)
+            </label>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={delInput}
+                onChange={(e) => setDelInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addDeliverable();
+                  }
+                }}
+                placeholder="e.g. File thiết kế Figma hoàn chỉnh & Mã nguồn GitHub"
+                className="flex-1 h-12 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white placeholder-white/40 outline-none focus:border-violet-500/50"
+              />
+              <button
+                type="button"
+                onClick={addDeliverable}
+                className="btn-secondary px-6"
+              >
+                <Plus className="h-4 w-4" />
+                Thêm
+              </button>
+            </div>
+            <ul className="space-y-2">
+              {deliverables.map((del, idx) => (
+                <li key={idx} className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] p-3 text-sm text-white/80">
+                  <span className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-violet-500/20 text-xs font-bold text-violet-300">
+                      {idx + 1}
+                    </span>
+                    {del}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeDeliverable(idx)}
+                    className="text-white/40 hover:text-red-400"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="pt-4 border-t border-white/10 flex justify-end">
             <button
               type="submit"
               disabled={isSubmitting || !connected}
-              className="btn-primary w-full disabled:opacity-50"
+              className="btn-primary"
             >
-              {isSubmitting ? (
-                <span className="flex items-center gap-2">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  Posting...
-                </span>
-              ) : (
-                <>
-                  Post Job
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
+              {isSubmitting ? "Posting Job..." : "Post Job Now"}
             </button>
           </div>
         </form>

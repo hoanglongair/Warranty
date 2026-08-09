@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { User, Shield, Wallet, Bell, Palette, Globe, Save, Check } from "lucide-react";
 import Image from "next/image";
@@ -17,6 +17,28 @@ export default function SettingsPage() {
   const { connected, address, provider } = useWalletStore();
   const { t } = useTranslation();
 
+  // Account State đồng bộ với CSDL Neon DB qua Profile API
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [bio, setBio] = useState("");
+  const [avatar, setAvatar] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!connected || !address) return;
+    fetch(`/api/profile/${address}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.profile) {
+          setName(data.profile.name || "");
+          setEmail(data.profile.email || "");
+          setBio(data.profile.bio || "");
+          setAvatar(data.profile.avatar || "");
+        }
+      })
+      .catch((err) => console.error("Fetch profile error in settings:", err));
+  }, [connected, address]);
+
   const tabs = [
     { id: "account", label: t("settings.account"), icon: User },
     { id: "security", label: t("settings.security"), icon: Shield },
@@ -26,10 +48,34 @@ export default function SettingsPage() {
     { id: "language", label: t("settings.language"), icon: Globe },
   ];
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleSave = async () => {
+    if (!connected || !address) {
+      alert("Vui lòng kết nối ví để lưu cài đặt.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/profile/${address}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, bio })
+      });
+      const data = await res.json();
+      if (res.ok && data.profile) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+      } else {
+        alert(data.error || "Không thể cập nhật cài đặt.");
+      }
+    } catch (err) {
+      console.error("Save settings error:", err);
+      alert("Lỗi kết nối khi lưu cài đặt.");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const displayName = name || (address ? `User ${address.slice(0, 6)}...${address.slice(-4)}` : "Guest User");
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -81,30 +127,27 @@ export default function SettingsPage() {
                 <h2 className="font-display text-xl font-bold text-white">{t("settings.accountSettings")}</h2>
                 
                 <div className="flex items-center gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/5">
-                  <div className="h-16 w-16 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center font-bold text-white text-xl">
-                    L
+                  <div className="h-16 w-16 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center font-bold text-white text-xl overflow-hidden">
+                    {avatar ? (
+                      <img src={avatar} alt={displayName} className="w-full h-full object-cover" />
+                    ) : (
+                      displayName.charAt(0)
+                    )}
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-white">Linh Nguyen</p>
-                    <p className="text-sm text-white/50">linh.nguyen@email.com</p>
+                    <p className="font-semibold text-white">{displayName}</p>
+                    <p className="text-xs text-violet-300 font-mono mt-0.5">{address || "Chưa kết nối ví"}</p>
                   </div>
-                  <button className="btn-secondary px-4 py-2 text-sm">{t("settings.changePhoto")}</button>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-white/60 mb-2">{t("settings.firstName")}</label>
+                    <label className="block text-sm font-medium text-white/60 mb-2">Tên Hiển Thị (Display Name)</label>
                     <input
                       type="text"
-                      defaultValue="Linh"
-                      className="w-full h-11 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white outline-none focus:border-violet-500/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-white/60 mb-2">{t("settings.lastName")}</label>
-                    <input
-                      type="text"
-                      defaultValue="Nguyen"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Nhập tên hiển thị của bạn"
                       className="w-full h-11 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white outline-none focus:border-violet-500/50"
                     />
                   </div>
@@ -114,7 +157,9 @@ export default function SettingsPage() {
                   <label className="block text-sm font-medium text-white/60 mb-2">{t("settings.email")}</label>
                   <input
                     type="email"
-                    defaultValue="linh.nguyen@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@example.com"
                     className="w-full h-11 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-white outline-none focus:border-violet-500/50"
                   />
                 </div>
@@ -123,13 +168,15 @@ export default function SettingsPage() {
                   <label className="block text-sm font-medium text-white/60 mb-2">{t("settings.bio")}</label>
                   <textarea
                     rows={4}
-                    defaultValue="Award-winning designer specializing in Web3, fintech, and SaaS brands."
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    placeholder="Mô tả ngắn về bạn..."
                     className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-white outline-none focus:border-violet-500/50 resize-none"
                   />
                 </div>
 
                 <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                  <button onClick={handleSave} className="btn-primary">
+                  <button onClick={handleSave} disabled={saving} className="btn-primary">
                     {saved ? (
                       <span className="flex items-center gap-2">
                         <Check className="h-4 w-4" />
@@ -138,7 +185,7 @@ export default function SettingsPage() {
                     ) : (
                       <span className="flex items-center gap-2">
                         <Save className="h-4 w-4" />
-                        {t("settings.saveChanges")}
+                        {saving ? "Đang lưu..." : t("settings.saveChanges")}
                       </span>
                     )}
                   </button>
@@ -230,10 +277,10 @@ export default function SettingsPage() {
                       <p className="text-sm text-white/50 mt-1">Select your preferred blockchain network</p>
                     </div>
                     <select className="h-10 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none">
+                      <option>Arc Testnet</option>
                       <option>Ethereum Mainnet</option>
                       <option>Polygon</option>
                       <option>Arbitrum</option>
-                      <option>Optimism</option>
                     </select>
                   </div>
                 </div>
