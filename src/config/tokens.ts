@@ -3,7 +3,7 @@
 // Prices: https://www.coingecko.com (updated July 10, 2026)
 
 export const ARC_CHAIN_ID_DECIMAL = 5042002;
-export const ARC_CHAIN_ID_HEX = "0x4CF4B2";
+export const ARC_CHAIN_ID_HEX = "0x4cef52";
 
 export const ARC_TESTNET_RPC = "https://rpc.testnet.arc.network";
 export const ARC_TESTNET_EXPLORER = "https://testnet.arcscan.app";

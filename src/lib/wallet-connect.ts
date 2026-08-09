@@ -265,25 +265,33 @@ export async function getBalance(id: WalletProvider, address: string): Promise<s
   })) as string;
 }
 
-export async function ensureArcTestnet(id: WalletProvider): Promise<void> {
+export async function switchNetwork(
+  id: WalletProvider,
+  chainIdHex: string,
+  chainParams?: Record<string, unknown>
+): Promise<void> {
   const provider = getProvider(id);
   if (!provider) throw new Error("Provider không khả dụng.");
   try {
     await provider.request({
       method: "wallet_switchEthereumChain",
-      params: [{ chainId: ARC_CHAIN_ID_HEX }]
+      params: [{ chainId: chainIdHex }]
     });
-  } catch (switchError) {
+  } catch (switchError: unknown) {
     const err = switchError as { code?: number };
-    if (err.code === 4902 || err.code === -32603) {
+    if ((err.code === 4902 || err.code === -32603) && chainParams) {
       await provider.request({
         method: "wallet_addEthereumChain",
-        params: [arcTestnetParams]
+        params: [chainParams]
       });
     } else {
       throw switchError;
     }
   }
+}
+
+export async function ensureArcTestnet(id: WalletProvider): Promise<void> {
+  return switchNetwork(id, ARC_CHAIN_ID_HEX, arcTestnetParams as unknown as Record<string, unknown>);
 }
 
 export function watchWallet(
