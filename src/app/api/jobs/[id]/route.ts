@@ -31,7 +31,7 @@ export async function GET(
         subcategory: dbJob.category,
         budget: dbJob.budget,
         budgetType: dbJob.budgetType || "fixed",
-        tokenSymbol: dbJob.tokenSymbol || "ETH",
+        tokenSymbol: dbJob.tokenSymbol || "USDC",
         skills: dbJob.skills || [],
         experience: "intermediate",
         duration: dbJob.deadline || "1-2 weeks",
@@ -42,7 +42,7 @@ export async function GET(
         applicants: dbJob.applications ? dbJob.applications.length : 0,
         proposals: dbJob.applications || [],
         employer: {
-          id: dbJob.client?.id || "client-1",
+          id: dbJob.client?.walletAddress || "client-1",
           name: dbJob.client?.name || `User ${dbJob.clientAddress.slice(0, 6)}...`,
           avatar: dbJob.client?.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${dbJob.clientAddress}`,
           walletAddress: dbJob.clientAddress,

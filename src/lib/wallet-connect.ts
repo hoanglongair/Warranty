@@ -46,7 +46,13 @@ interface CustomWindow {
   binance?: EthereumProvider;
 }
 
-function isPureMetaMask(p: EthereumProvider): boolean {
+function isOKXProvider(p: EthereumProvider): boolean {
+  if (!p) return false;
+  const anyP = p as unknown as Record<string, boolean | undefined>;
+  return Boolean(anyP.isOKXWallet || anyP.isOkxWallet);
+}
+
+function isMetaMaskProvider(p: EthereumProvider): boolean {
   if (!p || !p.isMetaMask) return false;
   const anyP = p as unknown as Record<string, boolean | undefined>;
   if (
@@ -79,7 +85,7 @@ if (typeof window !== "undefined") {
       const lowerRdns = rdns ? rdns.toLowerCase() : "";
       const lowerName = name ? name.toLowerCase() : "";
 
-      if (lowerRdns.includes("metamask") || lowerName.includes("metamask")) {
+      if ((lowerRdns.includes("metamask") || lowerName.includes("metamask")) && !lowerRdns.includes("okx") && !lowerName.includes("okx")) {
         eip6963Providers["metamask"] = provider;
       }
       if (lowerRdns.includes("okx") || lowerRdns.includes("okex") || lowerName.includes("okx")) {
@@ -111,14 +117,9 @@ if (typeof window !== "undefined") {
 export function getProvider(id: WalletProvider): EthereumProvider | null {
   if (typeof window === "undefined") return null;
 
-  // 1. Check EIP-6963 discovered providers FIRST
-  if (eip6963Providers[id] && typeof eip6963Providers[id].request === "function") {
-    return eip6963Providers[id];
-  }
-
   const w = window as unknown as CustomWindow;
 
-  // Dedicated window objects injected by specific extensions
+  // 1. Dedicated window objects first (OKX Wallet has dedicated window.okxwallet)
   if (id === "okx" && w.okxwallet && typeof w.okxwallet.request === "function") {
     return w.okxwallet;
   }
@@ -136,60 +137,67 @@ export function getProvider(id: WalletProvider): EthereumProvider | null {
     if (b && typeof b.request === "function") return b;
   }
 
+  // 2. Check EIP-6963 discovered providers
+  if (eip6963Providers[id] && typeof eip6963Providers[id].request === "function") {
+    return eip6963Providers[id];
+  }
+
   if (!w.ethereum) return null;
 
-  // Handle window.ethereum.providers array (Multi-extension environment)
+  // 3. Multi-extension environment (window.ethereum.providers array)
   if (Array.isArray(w.ethereum.providers)) {
     const providers = w.ethereum.providers;
 
     if (id === "metamask") {
-      const pureMetaMask = providers.find(isPureMetaMask);
+      const pureMetaMask = providers.find(isMetaMaskProvider);
       if (pureMetaMask) return pureMetaMask;
-      const anyMetaMask = providers.find((p) => p.isMetaMask);
-      if (anyMetaMask) return anyMetaMask;
+      return null;
     }
 
     if (id === "okx") {
-      const hit = providers.find((p) => {
-        const anyP = p as unknown as Record<string, boolean | undefined>;
-        return Boolean(anyP.isOKXWallet || anyP.isOkxWallet);
-      });
-      if (hit) return hit;
+      const okx = providers.find(isOKXProvider);
+      if (okx) return okx;
+      return null;
     }
 
     if (id === "coinbase") {
       const hit = providers.find((p) => p.isCoinbaseWallet);
       if (hit) return hit;
+      return null;
     }
 
     if (id === "phantom") {
       const hit = providers.find((p) => p.isPhantom);
       if (hit) return hit;
+      return null;
     }
 
     if (id === "trust") {
       const hit = providers.find((p) => p.isTrust);
       if (hit) return hit;
+      return null;
     }
 
     if (id === "binance") {
       const hit = providers.find((p) => p.isBinanceW3W || p.isBinance);
       if (hit) return hit;
+      return null;
     }
+
+    return null;
   }
 
-  // Handle single window.ethereum injection
+  // 4. Single window.ethereum provider
   const ep = w.ethereum as EthereumProvider;
 
   if (id === "metamask") {
-    if (isPureMetaMask(ep)) return ep;
-    if (ep.isMetaMask && !(ep as unknown as Record<string, boolean | undefined>).isOKXWallet) return ep;
+    if (isMetaMaskProvider(ep)) return ep;
     return null;
   }
 
   if (id === "okx") {
-    const anyEp = ep as unknown as Record<string, boolean | undefined>;
-    if (anyEp.isOKXWallet || anyEp.isOkxWallet) return ep;
+    if (isOKXProvider(ep)) return ep;
+    return null;
   }
 
   if (id === "coinbase" && ep.isCoinbaseWallet) return ep;
@@ -197,9 +205,7 @@ export function getProvider(id: WalletProvider): EthereumProvider | null {
   if (id === "trust" && ep.isTrust) return ep;
   if (id === "binance" && (ep.isBinanceW3W || ep.isBinance)) return ep;
 
-  // Fallback only if no specific wallet flag matches above
-  if (typeof ep.request === "function") return ep;
-
+  // Strictly return null if requested extension is not installed
   return null;
 }
 

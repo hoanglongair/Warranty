@@ -66,21 +66,10 @@ export const useJobStore = create<JobStore>()(
         })),
 
       addJob: async (job) => {
-        // Lưu tạm trên state local
-        set((state) => ({ myJobs: [job, ...state.myJobs] }));
-        
-        // Gửi API đến Backend
-        try {
-          await fetch("/api/jobs", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(job)
-          });
-          // Refresh danh sách
-          get().fetchJobs();
-        } catch (err) {
-          console.error("Failed to post job to backend:", err);
-        }
+        set((state) => ({
+          myJobs: [job, ...state.myJobs.filter((j) => j.id !== job.id)],
+          jobs: [job, ...state.jobs.filter((j) => j.id !== job.id)]
+        }));
       }
     }),
     {

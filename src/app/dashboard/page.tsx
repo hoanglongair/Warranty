@@ -52,12 +52,31 @@ export default function DashboardPage() {
         animate={{ opacity: 1, y: 0 }}
         className="mb-8"
       >
-        <h1 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
-          Dashboard
-        </h1>
-        <p className="mt-3 max-w-2xl text-lg text-white/60">
-          Manage your projects, track earnings, and connect with {tab === "employer" ? "freelancers" : "clients"}.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
+              Dashboard
+            </h1>
+            <p className="mt-3 max-w-2xl text-lg text-white/60">
+              Manage your projects, track earnings, and connect with {tab === "employer" ? "freelancers" : "clients"}.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard/client"
+              className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 border-violet-500/30 text-violet-300"
+            >
+              📊 Báo Cáo Người Thuê (Client Report)
+            </Link>
+            <Link
+              href="/dashboard/freelancer"
+              className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 border-cyan-500/30 text-cyan-300"
+            >
+              📈 Báo Cáo Freelancer (Freelancer Report)
+            </Link>
+          </div>
+        </div>
       </motion.div>
 
       <motion.div

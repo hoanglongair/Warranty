@@ -64,8 +64,8 @@ export function CategoriesSection() {
                         <h3 className="font-display text-xl font-bold text-white">
                           {category.name}
                         </h3>
-                        <p className="text-xs text-white/50">
-                          {category.count.toLocaleString()} {t("categories.projects")}
+                        <p className="text-xs text-white/50" suppressHydrationWarning>
+                          {category.count.toLocaleString("en-US")} {t("categories.projects")}
                         </p>
                       </div>
                     </div>

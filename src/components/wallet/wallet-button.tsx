@@ -49,16 +49,29 @@ export function WalletButton() {
     if (!connected || !realConnection || !provider) return;
     let cancelled = false;
     let unsub: (() => void) | null = null;
+    let intervalId: NodeJS.Timeout | null = null;
+
+    const fetchLatestBalance = async () => {
+      if (!address || !provider) return;
+      try {
+        const wei = await getBalance(provider, address);
+        if (!cancelled) setBalance(formatBalanceWeiToEth(wei));
+      } catch {
+        // silent
+      }
+    };
 
     (async () => {
       try {
         const chainHex = await getChainId(provider);
         if (cancelled) return;
         setChainId(parseInt(chainHex, 16));
-        if (address) {
-          const wei = await getBalance(provider, address);
-          if (!cancelled) setBalance(formatBalanceWeiToEth(wei));
-        }
+        
+        await fetchLatestBalance();
+
+        // Polling tự động mỗi 4 giây để cập nhật số dư thời gian thực (Real-time)
+        intervalId = setInterval(fetchLatestBalance, 4000);
+
         unsub = watchWallet(provider, {
           onAccountsChanged: (next) => {
             if (!next || next.length === 0) {
@@ -83,6 +96,7 @@ export function WalletButton() {
 
     return () => {
       cancelled = true;
+      if (intervalId) clearInterval(intervalId);
       unsub?.();
     };
   }, [connected, realConnection, provider, address, setBalance, setChainId, setError, disconnect]);
@@ -190,7 +204,7 @@ export function WalletButton() {
                   {balance.toFixed(4)} <span className="text-base text-white/60">{symbol}</span>
                 </p>
                 <p className="mt-0.5 text-xs text-white/50">
-                  ≈ ${(balance * (isArcTestnet ? 1 : 2950)).toLocaleString(undefined, { maximumFractionDigits: 2 })} USD
+                  ≈ ${(balance * (isArcTestnet ? 1 : 2950)).toLocaleString("en-US", { maximumFractionDigits: 2 })} USD
                 </p>
                 {!isArcTestnet && realConnection && (
                   <button

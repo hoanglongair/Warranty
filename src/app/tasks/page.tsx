@@ -98,8 +98,8 @@ export default function TasksPage() {
       >
         {[
           { label: t("tasks.availableTasks"), value: taskStats.totalTasks.toString(), color: "from-violet-500 to-purple-500" },
-          { label: t("tasks.totalEarned"), value: `$${taskStats.totalEarned.toLocaleString()}`, color: "from-green-500 to-emerald-500" },
-          { label: t("tasks.activeWorkers"), value: taskStats.activeWorkers.toLocaleString(), color: "from-cyan-500 to-blue-500" },
+          { label: t("tasks.totalEarned"), value: `$${taskStats.totalEarned.toLocaleString("en-US")}`, color: "from-green-500 to-emerald-500" },
+          { label: t("tasks.activeWorkers"), value: taskStats.activeWorkers.toLocaleString("en-US"), color: "from-cyan-500 to-blue-500" },
           { label: t("tasks.avgReward"), value: `$${taskStats.avgReward}`, color: "from-amber-500 to-orange-500" }
         ].map((stat) => (
           <div key={stat.label} className="glass-card p-4 flex items-center gap-4">

@@ -42,10 +42,10 @@ export function TaskCard({ task, index = 0 }: TaskCardProps) {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.4, delay: index * 0.05 }}
-      className="group"
+      className="group h-full"
     >
-      <Link href={`/tasks/${task.id}`} className="block">
-        <div className="glass-card hover-lift relative h-full overflow-hidden p-5">
+      <Link href={`/tasks/${task.id}`} className="block h-full">
+        <div className="glass-card hover-lift relative h-full flex flex-col justify-between overflow-hidden p-5">
           {/* Glow effect based on category */}
           <div
             className={`absolute -right-12 -top-12 h-32 w-32 rounded-full opacity-20 blur-3xl transition-opacity group-hover:opacity-35 ${
@@ -57,112 +57,120 @@ export function TaskCard({ task, index = 0 }: TaskCardProps) {
             }`}
           />
 
-          <div className="relative">
-            {/* Badges */}
-            <div className="mb-3 flex items-center gap-2 flex-wrap">
-              <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-medium capitalize ${category.color}`}>
-                {task.category}
-              </span>
-              <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-medium ${difficulty.color}`}>
-                {difficulty.label}
-              </span>
-              {isHot && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 border border-red-500/20 px-2.5 py-1 text-[10px] font-medium text-red-400">
-                  <Zap className="h-2.5 w-2.5" />
-                  Hot
+          <div className="relative flex flex-col justify-between h-full flex-1">
+            <div className="flex-1 flex flex-col">
+              {/* Badges */}
+              <div className="mb-3 flex items-center gap-2 flex-wrap">
+                <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-medium capitalize ${category.color}`}>
+                  {task.category}
                 </span>
-              )}
-              {isUrgent && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 text-[10px] font-medium text-amber-400">
-                  <Timer className="h-2.5 w-2.5" />
-                  Urgent
+                <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-medium ${difficulty.color}`}>
+                  {difficulty.label}
                 </span>
-              )}
-            </div>
-
-            {/* Title */}
-            <h3 className="font-display text-base font-semibold text-white group-hover:text-violet-200 line-clamp-2">
-              {task.title}
-            </h3>
-
-            {/* Description */}
-            <p className="mt-2 line-clamp-2 text-sm text-white/50">
-              {task.description}
-            </p>
-
-            {/* Skills */}
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {task.skills.slice(0, 3).map((skill) => (
-                <span
-                  key={skill}
-                  className="rounded-md border border-white/5 bg-white/[0.03] px-2 py-0.5 text-[11px] text-white/70"
-                >
-                  {skill}
-                </span>
-              ))}
-              {task.skills.length > 3 && (
-                <span className="rounded-md border border-white/5 bg-white/[0.03] px-2 py-0.5 text-[11px] text-white/50">
-                  +{task.skills.length - 3}
-                </span>
-              )}
-            </div>
-
-            {/* Stats Row */}
-            <div className="mt-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  <DollarSign className="h-4 w-4 text-green-400" />
-                  <span className="font-display text-lg font-bold text-white">
-                    {formatCurrency(task.reward)}
+                {isHot && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 border border-red-500/20 px-2.5 py-1 text-[10px] font-medium text-red-400">
+                    <Zap className="h-2.5 w-2.5" />
+                    Hot
                   </span>
-                </div>
-                <div className="h-4 w-px bg-white/10" />
-                <div className="flex items-center gap-1.5 text-xs text-white/50">
-                  <Clock className="h-3.5 w-3.5" />
-                  <span>{task.timeEstimate}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-4">
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 text-[10px] font-bold text-white">
-                  {task.employer.name.charAt(0)}
-                </div>
-                <div>
-                  <div className="flex items-center gap-1">
-                    <p className="text-xs font-medium text-white">
-                      {task.employer.name}
-                    </p>
-                    {task.employer.verified && (
-                      <CheckCircle2 className="h-3 w-3 text-violet-400" />
-                    )}
-                  </div>
-                  <p className="text-[10px] text-white/40">
-                    ★ {task.employer.rating} · {task.employer.tasksCompleted} tasks
-                  </p>
-                </div>
+                )}
+                {isUrgent && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 text-[10px] font-medium text-amber-400">
+                    <Timer className="h-2.5 w-2.5" />
+                    Urgent
+                  </span>
+                )}
               </div>
 
-              {/* Spots Available */}
-              <div className="text-right">
-                <p className={`text-xs font-medium ${spotsLeft <= 3 ? "text-red-400" : "text-white/50"}`}>
-                  {spotsLeft > 0 ? `${spotsLeft} spots left` : "Full"}
+              {/* Title fixed height 2-line slot */}
+              <div className="h-12 flex items-start">
+                <h3 className="font-display text-base font-semibold text-white group-hover:text-violet-200 line-clamp-2 leading-snug">
+                  {task.title}
+                </h3>
+              </div>
+
+              {/* Description fixed height 2-line slot */}
+              <div className="mt-2 h-10 flex items-start">
+                <p className="line-clamp-2 text-sm text-white/50 leading-snug">
+                  {task.description}
                 </p>
-                <div className="mt-1 h-1.5 w-12 overflow-hidden rounded-full bg-white/10">
-                  <div 
-                    className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-500 transition-all"
-                    style={{ width: `${(task.currentSubmissions / task.maxSubmissions) * 100}%` }}
-                  />
-                </div>
+              </div>
+
+              {/* Skills fixed height slot */}
+              <div className="mt-3 h-7 flex flex-wrap items-center gap-1.5 overflow-hidden">
+                {task.skills.slice(0, 3).map((skill) => (
+                  <span
+                    key={skill}
+                    className="rounded-md border border-white/5 bg-white/[0.03] px-2 py-0.5 text-[11px] text-white/70"
+                  >
+                    {skill}
+                  </span>
+                ))}
+                {task.skills.length > 3 && (
+                  <span className="rounded-md border border-white/5 bg-white/[0.03] px-2 py-0.5 text-[11px] text-white/50">
+                    +{task.skills.length - 3}
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Posted Time */}
-            <div className="mt-3 flex items-center justify-between text-[10px] text-white/40">
-              <span>Posted {timeAgo(task.postedAt)}</span>
-              <span>Due {new Date(task.deadline).toLocaleDateString()}</span>
+            <div>
+              {/* Stats Row */}
+              <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <DollarSign className="h-4 w-4 text-green-400" />
+                    <span className="font-display text-lg font-bold text-white">
+                      {formatCurrency(task.reward)}
+                    </span>
+                  </div>
+                  <div className="h-4 w-px bg-white/10" />
+                  <div className="flex items-center gap-1.5 text-xs text-white/50">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>{task.timeEstimate}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-4">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 text-[10px] font-bold text-white">
+                    {task.employer.name.charAt(0)}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <p className="text-xs font-medium text-white truncate max-w-[120px]">
+                        {task.employer.name}
+                      </p>
+                      {task.employer.verified && (
+                        <CheckCircle2 className="h-3 w-3 text-violet-400 flex-shrink-0" />
+                      )}
+                    </div>
+                    <p className="text-[10px] text-white/40">
+                      ★ {task.employer.rating} · {task.employer.tasksCompleted} tasks
+                    </p>
+                  </div>
+                </div>
+
+                {/* Spots Available */}
+                <div className="text-right">
+                  <p className={`text-xs font-medium ${spotsLeft <= 3 ? "text-red-400" : "text-white/50"}`}>
+                    {spotsLeft > 0 ? `${spotsLeft} spots left` : "Full"}
+                  </p>
+                  <div className="mt-1 h-1.5 w-12 overflow-hidden rounded-full bg-white/10">
+                    <div 
+                      className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-500 transition-all"
+                      style={{ width: `${(task.currentSubmissions / task.maxSubmissions) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Posted Time */}
+              <div className="mt-3 flex items-center justify-between text-[10px] text-white/40">
+                <span>Posted {timeAgo(task.postedAt)}</span>
+                <span>Due {new Date(task.deadline).toLocaleDateString()}</span>
+              </div>
             </div>
           </div>
         </div>

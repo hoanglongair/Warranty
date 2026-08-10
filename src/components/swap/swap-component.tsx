@@ -157,7 +157,7 @@ export function SwapComponent() {
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm text-white/50">You pay</span>
           <span className="text-sm text-white/40">
-            Balance: {fromToken.amount.toLocaleString()} {fromToken.symbol}
+            Balance: {fromToken.amount.toLocaleString("en-US")} {fromToken.symbol}
           </span>
         </div>
         
@@ -219,7 +219,7 @@ export function SwapComponent() {
         
         {fromAmount && (
           <div className="mt-2 text-sm text-white/40">
-            ≈ ${(parseFloat(fromAmount) * fromToken.value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ≈ ${(parseFloat(fromAmount) * fromToken.value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
         )}
       </div>
@@ -239,7 +239,7 @@ export function SwapComponent() {
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm text-white/50">You receive</span>
           <span className="text-sm text-white/40">
-            Balance: {toToken.amount.toLocaleString()} {toToken.symbol}
+            Balance: {toToken.amount.toLocaleString("en-US")} {toToken.symbol}
           </span>
         </div>
         
@@ -301,7 +301,7 @@ export function SwapComponent() {
         
         {toAmount && (
           <div className="mt-2 text-sm text-white/40">
-            ≈ ${(parseFloat(toAmount) * toToken.value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ≈ ${(parseFloat(toAmount) * toToken.value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
         )}
       </div>

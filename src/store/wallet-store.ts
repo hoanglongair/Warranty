@@ -23,6 +23,8 @@ interface WalletStore extends WalletState {
   setError: (error: string | null) => void;
   disconnect: () => void;
   addTransaction: (tx: Transaction) => void;
+  refreshRealtimeBalance: () => Promise<void>;
+  deductBalance: (amount: number) => void;
 }
 
 const mockTransactions: Transaction[] = [
@@ -90,7 +92,7 @@ const mockTransactions: Transaction[] = [
 
 export const useWalletStore = create<WalletStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       connected: false,
       address: null,
       provider: null,
@@ -139,7 +141,20 @@ export const useWalletStore = create<WalletStore>()(
           error: null
         }),
       addTransaction: (tx) =>
-        set((state) => ({ transactions: [tx, ...state.transactions] }))
+        set((state) => ({ transactions: [tx, ...state.transactions] })),
+      refreshRealtimeBalance: async () => {
+        const state = get();
+        if (!state.address || !state.provider) return;
+        try {
+          const { getBalance, formatBalanceWeiToEth } = await import("@/lib/wallet-connect");
+          const wei = await getBalance(state.provider, state.address);
+          set({ balance: formatBalanceWeiToEth(wei) });
+        } catch {
+          // ignore rate limits / silent fallback
+        }
+      },
+      deductBalance: (amount: number) =>
+        set((state) => ({ balance: Math.max(0, state.balance - amount) }))
     }),
     {
       name: "warranty-wallet",

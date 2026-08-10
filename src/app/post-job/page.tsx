@@ -11,13 +11,14 @@ import { WalletButton } from "@/components/wallet/wallet-button";
 import { useWalletStore } from "@/store/wallet-store";
 import { useJobStore } from "@/store/job-store";
 import { CustomSelect } from "@/components/ui/custom-select";
+import { depositEscrowOnChain } from "@/lib/escrow-contract";
 
 const jobSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters"),
   description: z.string().min(50, "Description must be at least 50 characters"),
   category: z.string().min(1, "Please select a category"),
   subcategory: z.string().min(1, "Please select a subcategory"),
-  budget: z.number().min(50, "Minimum budget is $50"),
+  budget: z.number().min(2, "Minimum budget is $20"),
   duration: z.string().min(1, "Please select a duration"),
   experience: z.string().min(1, "Please select experience level"),
   type: z.string().min(1, "Please select job type"),
@@ -39,7 +40,7 @@ const experienceLevels = ["Entry", "Intermediate", "Expert"];
 export default function PostJobPage() {
   const [skills, setSkills] = useState<string[]>([]);
   const [skillInput, setSkillInput] = useState("");
-  
+
   const [requirements, setRequirements] = useState<string[]>([
     "Kinh nghiệm làm việc Web3 / Software Development",
     "Giao tiếp tốt và bàn giao công việc đúng thời hạn",
@@ -55,8 +56,11 @@ export default function PostJobPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [escrowTxHash, setEscrowTxHash] = useState<string>("");
+  const [postError, setPostError] = useState<string>("");
+
   const { addJob } = useJobStore();
-  const { connected, address } = useWalletStore();
+  const { connected, address, provider } = useWalletStore();
 
   const { register, handleSubmit, formState: { errors }, setValue, watch, reset } = useForm<JobFormData>({
     resolver: zodResolver(jobSchema),
@@ -126,31 +130,87 @@ export default function PostJobPage() {
   };
 
   const onSubmit = async (data: JobFormData) => {
+    if (!connected || !address) {
+      setPostError("Vui lòng kết nối ví Web3 trước khi đăng bài tuyển dụng và nạp cọc Escrow.");
+      return;
+    }
+
     setIsSubmitting(true);
+    setPostError("");
+
     try {
-      const newJobObj = {
-        id: `job-${Date.now()}`,
+      const tempJobId = `job-${Date.now()}`;
+
+      // 1. Thực hiện Ký quỹ nạp cọc Escrow vào Smart Contract
+      const txHash = await depositEscrowOnChain(
+        provider || "metamask",
+        tempJobId,
+        "0x0000000000000000000000000000000000000000",
+        data.budget.toString()
+      );
+
+      setEscrowTxHash(txHash);
+
+      // 2. Gửi yêu cầu lưu Bài đăng và Hợp đồng cọc vào CSDL
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: data.title,
+          description: data.description,
+          category: data.category,
+          budget: data.budget,
+          budgetType: "fixed",
+          tokenSymbol: "USDC",
+          clientAddress: address,
+          skills: data.skills,
+          requirements: requirements,
+          deliverables: deliverables,
+          deadline: data.duration,
+          location: data.type,
+          txHash
+        })
+      });
+
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || "Không thể lưu thông tin bài đăng vào CSDL.");
+      }
+
+      const { addJob, fetchJobs } = useJobStore.getState();
+      const { refreshRealtimeBalance, deductBalance } = useWalletStore.getState();
+
+      // Cập nhật ngay số dư ví trên Header (Realtime)
+      deductBalance(data.budget);
+      refreshRealtimeBalance();
+
+      await addJob({
+        id: resData.job?.id || tempJobId,
         title: data.title,
         description: data.description,
         category: data.category,
         budget: data.budget,
         budgetType: "fixed",
-        tokenSymbol: "ETH",
-        clientAddress: address || "0x9F2A8B4C1D7E3F5B8A2C9D4E6F1B7A3C8E2D5F9B1",
+        tokenSymbol: "USDC",
+        clientAddress: address,
         skills: data.skills,
-        requirements: requirements,
-        deliverables: deliverables,
+        requirements,
+        deliverables,
         deadline: data.duration,
-        location: data.type
-      };
+        location: data.type,
+        status: "IN_PROGRESS"
+      } as any);
 
-      await addJob(newJobObj as any);
+      // Refresh Marketplace state
+      fetchJobs();
+
       setIsSubmitting(false);
       setSubmitted(true);
       reset();
       setSkills([]);
-    } catch (err) {
-      console.error("Job submit error:", err);
+    } catch (err: any) {
+      console.error("Job submit & Escrow deposit error:", err);
+      setPostError(err?.message || "Không thể nạp cọc Smart Contract Escrow.");
       setIsSubmitting(false);
     }
   };
@@ -163,21 +223,29 @@ export default function PostJobPage() {
           animate={{ opacity: 1, scale: 1 }}
           className="glass-card p-12 text-center"
         >
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-500">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-500 shadow-xl">
             <Check className="h-10 w-10 text-white" />
           </div>
           <h1 className="font-display text-3xl font-bold text-white">
-            Job Posted Successfully!
+            Đã Nạp Cọc Escrow & Đăng Bài Thành Công!
           </h1>
-          <p className="mt-4 max-w-md mx-auto text-white/60">
-            Your job is now live on the marketplace. Freelancers will be able to find and apply for your project.
+          <p className="mt-4 max-w-md mx-auto text-white/70">
+            Tiền cọc dự án đã được khóa an toàn vào Smart Contract Escrow. Bài đăng của bạn đã hiển thị trên thị trường để các Freelancer ứng tuyển.
           </p>
+
+          {escrowTxHash && (
+            <div className="mt-6 p-4 rounded-xl border border-violet-500/30 bg-violet-500/10 max-w-lg mx-auto text-xs text-white/80">
+              <span className="text-violet-300 font-semibold block mb-1">Mã Giao Dịch Ký Quỹ (TxHash Escrow):</span>
+              <span className="font-mono text-cyan-300 break-all">{escrowTxHash}</span>
+            </div>
+          )}
+
           <div className="mt-8 flex items-center justify-center gap-4">
             <Link href="/marketplace" className="btn-primary">
-              View Marketplace
+              Xem Bài Đăng Trên Thị Trường
             </Link>
             <button onClick={() => setSubmitted(false)} className="btn-secondary">
-              Post Another Job
+              Đăng Bài Tuyển Dụng Khác
             </button>
           </div>
         </motion.div>
@@ -285,14 +353,14 @@ export default function PostJobPage() {
 
             <div>
               <label className="block text-sm font-medium text-white mb-2">
-                Budget (USD) <span className="text-violet-400">*</span>
+                Budget (USDC) <span className="text-violet-400">*</span>
               </label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40">$</span>
                 <input
                   {...register("budget", { valueAsNumber: true })}
                   type="number"
-                  min="50"
+                  min="2"
                   placeholder="500"
                   className="w-full h-12 rounded-xl border border-white/10 bg-white/[0.04] pl-8 pr-4 text-white placeholder-white/40 outline-none focus:border-violet-500/50"
                 />
@@ -490,13 +558,30 @@ export default function PostJobPage() {
             </ul>
           </div>
 
-          <div className="pt-4 border-t border-white/10 flex justify-end">
+          {postError && (
+            <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-xs text-red-300">
+              ⚠️ {postError}
+            </div>
+          )}
+
+          <div className="pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-4">
+            <div className="text-xs text-white/50">
+              * Ngân sách sẽ được ký quỹ cọc an toàn trên Smart Contract Escrow khi đăng bài.
+            </div>
+
             <button
               type="submit"
               disabled={isSubmitting || !connected}
-              className="btn-primary"
+              className="btn-primary flex items-center gap-2"
             >
-              {isSubmitting ? "Posting Job..." : "Post Job Now"}
+              {isSubmitting ? (
+                <>
+                  <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  Đang nạp cọc Escrow & Đăng bài...
+                </>
+              ) : (
+                "Nạp Cọc Escrow & Đăng Bài"
+              )}
             </button>
           </div>
         </form>

@@ -38,7 +38,7 @@ const wallets: Array<{
     id: "metamask",
     name: "MetaMask",
     description: "Connect using browser extension",
-    icon: "/wallets/okx.png",
+    icon: "/wallets/metamask.png",
     popular: true,
     installUrl: "https://metamask.io/download/"
   },
@@ -46,7 +46,7 @@ const wallets: Array<{
     id: "okx",
     name: "OKX Wallet",
     description: "Connect with OKX Web3 wallet",
-    icon: "/wallets/metamask.png",
+    icon: "/wallets/okx.png",
     popular: true,
     installUrl: "https://www.okx.com/web3"
   },

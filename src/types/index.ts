@@ -18,6 +18,7 @@ export interface Job {
   category: Category;
   subcategory: string;
   budget: number;
+  tokenSymbol?: string;
   skills: string[];
   experience: ExperienceLevel;
   duration: string;

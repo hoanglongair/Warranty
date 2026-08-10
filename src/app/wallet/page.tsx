@@ -39,7 +39,7 @@ export default function WalletPage() {
   const usdValue = isArcTestnet ? balance : balance * ethUsdPrice;
 
   const stats = [
-    { label: "Total Balance", value: `${balance.toFixed(4)} ${symbol}`, subvalue: `≈ $${usdValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, icon: Wallet, color: "from-violet-500 to-purple-500" },
+    { label: "Total Balance", value: `${balance.toFixed(4)} ${symbol}`, subvalue: `≈ $${usdValue.toLocaleString("en-US", { maximumFractionDigits: 2 })}`, icon: Wallet, color: "from-violet-500 to-purple-500" },
     { label: "Received", value: "$9,200", subvalue: "5 transactions", icon: ArrowDownLeft, color: "from-green-500 to-emerald-500" },
     { label: "Sent", value: "$45.50", subvalue: "1 transaction", icon: ArrowUpRight, color: "from-amber-500 to-orange-500" },
   ];
@@ -217,7 +217,7 @@ export default function WalletPage() {
                 {balance.toFixed(4)} <span className="text-lg text-white/60">{symbol}</span>
               </p>
               <p className="text-sm text-white/50">
-                ≈ ${usdValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD
+                ≈ ${usdValue.toLocaleString("en-US", { maximumFractionDigits: 2 })} USD
               </p>
             </div>
           </div>
@@ -291,8 +291,8 @@ export default function WalletPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-display font-bold text-white">{asset.amount.toLocaleString()} {asset.symbol}</p>
-                    <p className="text-xs text-white/50">${asset.value.toLocaleString()}</p>
+                    <p className="font-display font-bold text-white">{asset.amount.toLocaleString("en-US")} {asset.symbol}</p>
+                    <p className="text-xs text-white/50">${asset.value.toLocaleString("en-US")}</p>
                   </div>
                 </div>
               ))}
@@ -334,7 +334,7 @@ export default function WalletPage() {
                   <p className={`font-display font-bold ${
                     tx.type === "incoming" ? "text-green-400" : "text-red-400"
                   }`}>
-                    {tx.type === "incoming" ? "+" : "-"}{tx.amount.toLocaleString()} {tx.currency}
+                    {tx.type === "incoming" ? "+" : "-"}{tx.amount.toLocaleString("en-US")} {tx.currency}
                   </p>
                   <div className="flex items-center gap-2 text-xs text-white/50">
                     <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full ${

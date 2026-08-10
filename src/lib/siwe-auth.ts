@@ -1,5 +1,6 @@
 import { SiweMessage } from "siwe";
-import { getProvider, WalletProvider } from "@/lib/wallet-connect";
+import { getProvider } from "@/lib/wallet-connect";
+import type { WalletProvider } from "@/types";
 
 export interface SIWEUser {
   walletAddress: string;

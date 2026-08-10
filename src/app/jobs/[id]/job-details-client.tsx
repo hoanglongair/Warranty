@@ -9,6 +9,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useWalletStore } from "@/store/wallet-store";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { CustomSelect } from "@/components/ui/custom-select";
+import { EscrowActionCard } from "@/components/jobs/escrow-action-card";
 
 interface JobDetailsClientProps {
   id: string;
@@ -210,6 +211,16 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
         </div>
 
         <div className="space-y-6">
+          <EscrowActionCard
+            job={job}
+            onRefresh={() => {
+              fetch(`/api/jobs/${jobId}`)
+                .then((res) => res.json())
+                .then((data) => { if (data.job) setJob(data.job); })
+                .catch(() => null);
+            }}
+          />
+
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

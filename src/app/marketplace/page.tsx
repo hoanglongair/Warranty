@@ -27,7 +27,7 @@ export default function MarketplacePage() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedExperience, setSelectedExperience] = useState<string | null>(null);
-  const [budgetRange, setBudgetRange] = useState<[number, number]>([100, 10000]);
+  const [budgetRange, setBudgetRange] = useState<[number, number]>([0, 100000]);
   const [sortBy, setSortBy] = useState<SortBy>("newest");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
