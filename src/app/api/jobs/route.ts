@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { jobs as JOBS_DATA } from "@/data/jobs";
+import { getAuthSession } from "@/lib/auth-guard";
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
     const search = searchParams.get("search");
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
+    const skip = (page - 1) * limit;
 
     const whereClause: Record<string, unknown> = {};
 
@@ -21,13 +24,23 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const jobs = await prisma.job.findMany({
-      where: whereClause,
-      orderBy: { createdAt: "desc" },
-      include: { client: true, applications: true }
-    });
+    const [jobs, totalJobs] = await Promise.all([
+      prisma.job.findMany({
+        where: whereClause,
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        skip: skip,
+        include: {
+          employer: true,
+          applications: {
+            include: { freelancer: true },
+            orderBy: { createdAt: "desc" }
+          }
+        }
+      }),
+      prisma.job.count({ where: whereClause })
+    ]);
 
-  // Gộp dữ liệu thật từ CSDL với Dữ liệu Mock để giao diện luôn đông đúc sinh động cho demo
     const formattedDbJobs = (jobs || []).map((j: any) => ({
       id: j.id,
       title: j.title,
@@ -36,7 +49,8 @@ export async function GET(req: NextRequest) {
       budget: j.budget,
       budgetType: j.budgetType || "fixed",
       tokenSymbol: j.tokenSymbol || "USDC",
-      clientAddress: j.clientAddress,
+      employerAddress: j.employerAddress,
+      clientAddress: j.employerAddress, // Backward compatibility alias
       skills: j.skills || [],
       requirements: j.requirements && j.requirements.length > 0 ? j.requirements : [
         "Kinh nghiệm làm việc Web3 / Software Development",
@@ -52,50 +66,79 @@ export async function GET(req: NextRequest) {
       location: j.location || "remote",
       postedAt: j.createdAt ? j.createdAt.toISOString() : new Date().toISOString(),
       applicants: j.applications ? j.applications.length : 0,
+      applications: j.applications || [],
       employer: {
-        id: j.client?.walletAddress || "client-1",
-        name: j.client?.name || `User ${j.clientAddress.slice(0, 6)}...`,
-        avatar: j.client?.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${j.clientAddress}`,
+        id: j.employer?.walletAddress || j.employerAddress,
+        name: j.employer?.name || `User ${j.employerAddress.slice(0, 6)}...`,
+        avatar: j.employer?.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${j.employerAddress}`,
+        walletAddress: j.employerAddress,
         rating: j.client?.rating || 5.0,
         jobsPosted: 1,
         verified: true
       }
     }));
 
-    // Lọc bỏ những bài mock trùng id với DB nếu có
-    const dbJobIds = new Set(formattedDbJobs.map((j: { id: string }) => j.id));
-    const remainingMocks = JOBS_DATA.filter((m) => !dbJobIds.has(m.id));
-
-    const combinedJobs = [...formattedDbJobs, ...remainingMocks];
-
-    return NextResponse.json({ jobs: combinedJobs, source: "combined" });
+    return NextResponse.json({
+      jobs: formattedDbJobs,
+      pagination: { page, limit, total: totalJobs, totalPages: Math.ceil(totalJobs / limit) },
+      source: "database"
+    });
   } catch (error) {
-    console.warn("DB query warning (Fallback to mock data):", error);
-    return NextResponse.json({ jobs: JOBS_DATA, source: "mock_fallback" });
+    console.error("DB query error in GET /api/jobs:", error);
+    return NextResponse.json({ jobs: [], error: "Không thể kết nối CSDL." }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { title, description, category, budget, budgetType, tokenSymbol, clientAddress, skills, requirements, deliverables, deadline, location, txHash } = body;
+    const { title, description, category, budget, budgetType, tokenSymbol, skills, requirements, deliverables, deadline, location } = body;
 
-    if (!title || !description || !category || !budget || !clientAddress) {
+    // Debug: check cookies
+    const cookies = req.cookies.getAll();
+    console.log("[POST /api/jobs] Cookies:", cookies.map(c => c.name).join(", "));
+    const warrantyToken = req.cookies.get("warranty_token")?.value;
+    console.log("[POST /api/jobs] warranty_token:", warrantyToken ? "EXISTS (" + warrantyToken.substring(0, 20) + "...)" : "MISSING");
+
+    const session = await getAuthSession(req);
+    console.log("[POST /api/jobs] Session:", session ? "OK" : "NULL");
+    if (!session) {
+      return NextResponse.json({ error: "Vui lòng đăng nhập để đăng bài tuyển dụng." }, { status: 401 });
+    }
+
+    const employerAddress = session.walletAddress;
+
+    if (!title || !description || !category || !budget || !employerAddress) {
       return NextResponse.json({ error: "Thiếu các thông tin bắt buộc của bài đăng." }, { status: 400 });
     }
 
-    const clientAddrLower = clientAddress.toLowerCase();
+    if (Number(budget) <= 0) {
+      return NextResponse.json({ error: "Ngân sách bài đăng phải lớn hơn 0." }, { status: 400 });
+    }
 
-    // Đảm bảo client user tồn tại
-    await prisma.user.upsert({
-      where: { walletAddress: clientAddrLower },
+    const employerAddrLower = employerAddress.toLowerCase();
+
+    // Đảm bảo employer user tồn tại & kiểm tra role
+    const user = await prisma.user.upsert({
+      where: { walletAddress: employerAddrLower },
       update: {},
       create: {
-        walletAddress: clientAddrLower,
-        name: `User ${clientAddrLower.slice(0, 6)}...`
+        walletAddress: employerAddrLower,
+        role: "FREELANCER",
+        name: `User ${employerAddrLower.slice(0, 6)}...`
       }
     });
 
+    if (user.role !== "EMPLOYER" && user.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Tài khoản của bạn hiện là Freelancer. Vui lòng gửi yêu cầu nâng cấp thành Employer và chờ Admin phê duyệt để có thể đăng tuyển công việc." },
+        { status: 403 }
+      );
+    }
+
+    // Luồng chuẩn: Tạo Job ở trạng thái OPEN, KHÔNG tạo Contract.
+    // Tiền cọc Escrow sẽ được nạp vào Smart Contract SAU khi Employer chọn được freelancer
+    // và nhấn "Nạp cọc" trên trang chi tiết công việc.
     const newJob = await prisma.job.create({
       data: {
         title,
@@ -104,8 +147,8 @@ export async function POST(req: NextRequest) {
         budget: Number(budget),
         budgetType: budgetType || "fixed",
         tokenSymbol: tokenSymbol || "USDC",
-        status: txHash ? "IN_PROGRESS" : "OPEN",
-        clientAddress: clientAddrLower,
+        status: "OPEN",
+        employerAddress: employerAddrLower,
         skills: Array.isArray(skills) ? skills : [],
         requirements: Array.isArray(requirements) ? requirements : [],
         deliverables: Array.isArray(deliverables) ? deliverables : [],
@@ -114,36 +157,7 @@ export async function POST(req: NextRequest) {
       } as any
     });
 
-    // Nếu có giao dịch cọc Escrow (txHash), tự động khởi tạo bản ghi Hợp đồng
-    let contract = null;
-    if (txHash) {
-      // Đảm bảo zero address user tồn tại để không vi phạm khóa ngoại
-      await prisma.user.upsert({
-        where: { walletAddress: "0x0000000000000000000000000000000000000000" },
-        update: {},
-        create: {
-          walletAddress: "0x0000000000000000000000000000000000000000",
-          name: "Pending Freelancer"
-        }
-      }).catch(() => null);
-
-      contract = await prisma.contract.create({
-        data: {
-          jobId: newJob.id,
-          clientAddress: clientAddrLower,
-          freelancerAddress: "0x0000000000000000000000000000000000000000",
-          totalAmount: Number(budget),
-          tokenSymbol: tokenSymbol || "USDC",
-          status: "FUNDED",
-          txHash
-        }
-      }).catch((e) => {
-        console.warn("Could not create contract record:", e);
-        return null;
-      });
-    }
-
-    return NextResponse.json({ success: true, job: newJob, contract });
+    return NextResponse.json({ success: true, job: newJob });
   } catch (error) {
     console.error("Create job error:", error);
     return NextResponse.json({ error: "Không thể khởi tạo công việc vào CSDL." }, { status: 500 });

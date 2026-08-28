@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Briefcase, Users, DollarSign, Clock, MapPin, Star, CheckCircle2, Calendar, ArrowRight, Share2, Loader2 } from "lucide-react";
-import { jobs as staticJobs } from "@/data/jobs";
+import { Briefcase, Users, DollarSign, MapPin, Star, CheckCircle2, Calendar, ArrowRight, Share2, Loader2, Clock } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useWalletStore } from "@/store/wallet-store";
+import { useJobStore } from "@/store/job-store";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { EscrowActionCard } from "@/components/jobs/escrow-action-card";
@@ -29,15 +29,12 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
         if (data.job) {
           setJob(data.job);
         } else {
-          // Fallback static job
-          const fallback = staticJobs.find((j) => j.id === jobId);
-          setJob(fallback || null);
+          setJob(null);
         }
       })
       .catch((err) => {
         console.error("Fetch job error:", err);
-        const fallback = staticJobs.find((j) => j.id === jobId);
-        setJob(fallback || null);
+        setJob(null);
       })
       .finally(() => setLoading(false));
   }, [jobId]);
@@ -63,19 +60,27 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
     );
   }
 
-  const similarJobs = staticJobs.filter((j) => j.category === job.category && j.id !== job.id).slice(0, 3);
+  const allStoreJobs = useJobStore.getState().jobs || [];
+  const similarJobs = allStoreJobs.filter((j) => j.category === job.category && j.id !== job.id).slice(0, 3);
   const employer = job.employer || {
-    name: job.client?.name || (job.clientAddress ? `User ${job.clientAddress.slice(0, 6)}...` : "Client"),
-    company: "Decentralized Client",
+    name: job.employer?.name || (job.employerAddress ? `User ${job.employerAddress.slice(0, 6)}...` : "Employer"),
+    company: "Decentralized Employer",
     rating: 5.0,
     reviews: 12,
     jobsPosted: 1,
     location: job.location || "Remote",
     memberSince: "2024",
     totalSpent: job.budget || 0,
-    walletAddress: job.clientAddress || address || "",
     verified: true
   };
+
+  const isEmployer = Boolean(
+    connected &&
+      address &&
+      job &&
+      ((job.employerAddress && job.employerAddress.toLowerCase() === address.toLowerCase()) ||
+        (job.employer?.walletAddress && job.employer.walletAddress.toLowerCase() === address.toLowerCase()))
+  );
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -243,6 +248,10 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
                     Connect your wallet to apply for this job
                   </p>
                 </div>
+              ) : isEmployer ? (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-center text-xs text-amber-200">
+                  Bạn là chủ bài đăng dự án này.
+                </div>
               ) : (
                 <a href="#proposal-form" className="btn-primary w-full text-center block">
                   Apply Now
@@ -269,7 +278,7 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
             transition={{ delay: 0.2 }}
             className="glass-card p-6"
           >
-            <h3 className="font-display text-lg font-bold text-white mb-4">About the Client</h3>
+            <h3 className="font-display text-lg font-bold text-white mb-4">About the Employer</h3>
             
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 font-bold text-white">
@@ -320,19 +329,20 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
             )}
           </motion.div>
 
-          <motion.div
-            id="proposal-form"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="glass-card p-6"
-          >
-            <h3 className="font-display text-lg font-bold text-white mb-4">Freelancer Proposal</h3>
-            <p className="text-sm text-white/60 mb-4">
-              Submit your proposal to apply for this job. Include your approach, timeline, and relevant experience.
-            </p>
-            <form
-              onSubmit={async (e) => {
+          {!isEmployer ? (
+            <motion.div
+              id="proposal-form"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="glass-card p-6"
+            >
+              <h3 className="font-display text-lg font-bold text-white mb-4">Freelancer Proposal</h3>
+              <p className="text-sm text-white/60 mb-4">
+                Submit your proposal to apply for this job. Include your approach, timeline, and relevant experience.
+              </p>
+              <form
+                onSubmit={async (e) => {
                 e.preventDefault();
                 if (!connected || !address) {
                   alert("Vui lòng kết nối ví để nộp đơn ứng tuyển.");
@@ -416,6 +426,7 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
               )}
             </form>
           </motion.div>
+          ) : null}
         </div>
       </div>
     </div>

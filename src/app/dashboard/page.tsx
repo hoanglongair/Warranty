@@ -1,312 +1,132 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { 
-  Briefcase, DollarSign, Users, Star, TrendingUp, Clock, 
-  CheckCircle2, XCircle, ArrowRight, FileText, Eye, MoreVertical
+  Briefcase, ShieldAlert, ArrowRight, ShieldCheck, Lock, UserCheck
 } from "lucide-react";
-import { jobs } from "@/data/jobs";
-import { freelancers } from "@/data/freelancers";
-import { formatCurrency, formatCompactNumber } from "@/lib/utils";
 import { useWalletStore } from "@/store/wallet-store";
-
-type Tab = "employer" | "freelancer";
-type Status = "active" | "completed" | "hired" | "proposals";
+import { WalletButton } from "@/components/wallet/wallet-button";
+import { checkAuthStatus } from "@/lib/siwe-auth";
 
 export default function DashboardPage() {
-  const [tab, setTab] = useState<Tab>("employer");
-  const [status, setStatus] = useState<Status>("active");
   const { connected, address } = useWalletStore();
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
-  const mockEmployerJobs = jobs.slice(0, 4);
-  const mockProposals = jobs[0].proposals.length > 0 ? jobs[0].proposals : [
-    { id: "prop-1", freelancerId: "fre-001", freelancer: freelancers[0], jobId: "job-001", coverLetter: "I'd love to work on this project!", bidAmount: 1200, deliveryDays: 7, submittedAt: "2026-06-14T10:00:00Z", status: "pending" as const },
-    { id: "prop-2", freelancerId: "fre-002", freelancer: freelancers[1], jobId: "job-001", coverLetter: "I have extensive experience in Web3 design.", bidAmount: 1500, deliveryDays: 5, submittedAt: "2026-06-13T15:00:00Z", status: "shortlisted" as const },
-    { id: "prop-3", freelancerId: "fre-003", freelancer: freelancers[2], jobId: "job-001", coverLetter: "Let me show you my portfolio.", bidAmount: 1000, deliveryDays: 10, submittedAt: "2026-06-12T09:00:00Z", status: "pending" as const },
-  ];
+  useEffect(() => {
+    checkAuthStatus().then((user) => {
+      if (user) {
+        setIsAuthenticated(true);
+        setUserRole(user.role || "FREELANCER");
+      } else {
+        setIsAuthenticated(false);
+      }
+    });
+  }, [connected, address]);
 
-  const mockFreelancerProjects = [
-    { id: "proj-1", title: "Web3 Landing Page Design", client: "Aurora Labs", status: "in_progress", earned: 750, progress: 50 },
-    { id: "proj-2", title: "Brand Identity Package", client: "Prism Studio", status: "completed", earned: 4000, progress: 100 },
-    { id: "proj-3", title: "React Dashboard", client: "Nebula DAO", status: "in_progress", earned: 1750, progress: 30 },
-  ];
+  if (isAuthenticated === null) {
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-20 text-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-violet-500 border-t-transparent" />
+        <p className="mt-4 text-sm text-white/60">Đang kiểm tra xác thực phiên làm việc SIWE...</p>
+      </div>
+    );
+  }
 
-  const stats = tab === "employer" ? [
-    { label: "Active Jobs", value: "3", icon: Briefcase, color: "from-violet-500 to-purple-500" },
-    { label: "Total Applicants", value: "48", icon: Users, color: "from-cyan-500 to-blue-500" },
-    { label: "Hired", value: "12", icon: CheckCircle2, color: "from-green-500 to-emerald-500" },
-    { label: "Total Spent", value: "$24.5K", icon: DollarSign, color: "from-amber-500 to-orange-500" },
-  ] : [
-    { label: "Active Projects", value: "2", icon: Briefcase, color: "from-violet-500 to-purple-500" },
-    { label: "Proposals Sent", value: "15", icon: FileText, color: "from-pink-500 to-rose-500" },
-    { label: "Total Earned", value: "$124K", icon: TrendingUp, color: "from-green-500 to-emerald-500" },
-    { label: "Avg. Rating", value: "4.9", icon: Star, color: "from-amber-500 to-orange-500" },
-  ];
+  if (!isAuthenticated) {
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-16 text-center">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-card p-10 border border-violet-500/30">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500/20 to-cyan-500/20 text-violet-400 border border-violet-500/30 mb-6">
+            <Lock className="h-8 w-8" />
+          </div>
+          <h1 className="font-display text-3xl font-bold text-white sm:text-4xl">
+            Yêu Cầu Xác Thực Ví (SIWE Authentication)
+          </h1>
+          <p className="mt-3 text-base text-white/60 max-w-xl mx-auto">
+            Bạn chưa ký xác thực ví hoặc chưa đăng nhập vào hệ thống Warranty. Để bảo mật dữ liệu và quyền sở hữu dự án Escrow, vui lòng kết nối ví và hoàn tất ký chữ ký SIWE.
+          </p>
+
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+            <WalletButton />
+            <Link href="/marketplace" className="btn-secondary px-5 py-3 text-sm">
+              Khám Phá Dự Án Công Khai
+            </Link>
+          </div>
+
+          <div className="mt-8 p-4 rounded-xl bg-white/[0.02] border border-white/5 text-left text-xs text-white/50 space-y-2">
+            <div className="flex items-center gap-2 text-violet-300 font-semibold">
+              <ShieldAlert className="h-4 w-4" /> Bảo Vệ 2 Lớp Cho Dashboard
+            </div>
+            <p>
+              • <strong>Bên A (Employer):</strong> Cần xác thực để xem báo cáo tuyển dụng, danh sách ứng viên và nạp cọc Escrow.
+            </p>
+            <p>
+              • <strong>Bên B (Freelancer):</strong> Cần xác thực để xem nơi đã ứng tuyển, tiến độ nghiệm thu và thu nhập ví.
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10 text-center">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-violet-500/10 text-violet-300 border border-violet-500/20 mb-3">
+          <UserCheck className="h-3.5 w-3.5" /> Phiên Xác Thực SIWE Hoạt Động
+        </span>
+        <h1 className="font-display text-4xl font-bold text-white sm:text-5xl">
+          Chào Mừng Đến Với Warranty Dashboard
+        </h1>
+        <p className="mt-3 text-lg text-white/60 max-w-2xl mx-auto">
+          Chọn trung tâm quản lý phù hợp với vai trò của bạn trên nền tảng tuyển dụng Web3 tích hợp Escrow.
+        </p>
+      </motion.div>
+
+      <div className="grid gap-8 sm:grid-cols-2 max-w-4xl mx-auto">
+        {/* Employer Card */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-card hover-lift p-8 flex flex-col justify-between border border-violet-500/30">
           <div>
-            <h1 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
-              Dashboard
-            </h1>
-            <p className="mt-3 max-w-2xl text-lg text-white/60">
-              Manage your projects, track earnings, and connect with {tab === "employer" ? "freelancers" : "clients"}.
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-white font-bold mb-6">
+              <Briefcase className="h-7 w-7" />
+            </div>
+            <span className="text-xs font-semibold text-violet-400 uppercase tracking-wider">Role: Người Thuê (Bên A)</span>
+            <h2 className="font-display text-2xl font-bold text-white mt-1">Employer Dashboard</h2>
+            <p className="mt-3 text-sm text-white/60 leading-relaxed">
+              Quản lý danh sách dự án đã đăng tuyển, theo dõi phễu ứng viên, xem biểu đồ dòng tiền Escrow và nạp cọc cho freelancer.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard/client"
-              className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 border-violet-500/30 text-violet-300"
-            >
-              📊 Báo Cáo Người Thuê (Client Report)
-            </Link>
-            <Link
-              href="/dashboard/freelancer"
-              className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 border-cyan-500/30 text-cyan-300"
-            >
-              📈 Báo Cáo Freelancer (Freelancer Report)
+          <div className="mt-8 pt-4 border-t border-white/5">
+            <Link href="/dashboard/employer" className="btn-primary w-full flex items-center justify-center gap-2 text-sm py-3">
+              Vào Employer Dashboard <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="mb-8"
-      >
-        <div className="flex items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.03] p-1.5 max-w-md">
-          <button
-            onClick={() => setTab("employer")}
-            className={`relative flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
-              tab === "employer" ? "text-white" : "text-white/50 hover:text-white/80"
-            }`}
-          >
-            {tab === "employer" && (
-              <motion.div
-                layoutId="dashboard-tab"
-                className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-500/20 to-cyan-500/20 ring-1 ring-white/10"
-                transition={{ type: "spring", stiffness: 380, damping: 30 }}
-              />
-            )}
-            <span className="relative">Người Thuê (Employer)</span>
-          </button>
-          <button
-            onClick={() => setTab("freelancer")}
-            className={`relative flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
-              tab === "freelancer" ? "text-white" : "text-white/50 hover:text-white/80"
-            }`}
-          >
-            {tab === "freelancer" && (
-              <motion.div
-                layoutId="dashboard-tab"
-                className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-500/20 to-cyan-500/20 ring-1 ring-white/10"
-                transition={{ type: "spring", stiffness: 380, damping: 30 }}
-              />
-            )}
-            <span className="relative">Người Được Thuê (Freelancer)</span>
-          </button>
-        </div>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-      >
-        {stats.map((stat) => (
-          <div key={stat.label} className="glass-card p-5">
-            <div className="flex items-center gap-4">
-              <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${stat.color}`}>
-                <stat.icon className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <p className="font-display text-2xl font-bold text-white">{stat.value}</p>
-                <p className="text-sm text-white/50">{stat.label}</p>
-              </div>
+        {/* Freelancer Card */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card hover-lift p-8 flex flex-col justify-between border border-cyan-500/30">
+          <div>
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white font-bold mb-6">
+              <ShieldCheck className="h-7 w-7" />
             </div>
+            <span className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">Role: Người Được Thuê (Bên B)</span>
+            <h2 className="font-display text-2xl font-bold text-white mt-1">Freelancer Dashboard</h2>
+            <p className="mt-3 text-sm text-white/60 leading-relaxed">
+              Theo dõi danh sách các đơn chào thầu đã nộp, tiến độ thực hiện dự án, số dư Escrow đang khoá và thu nhập giải ngân về ví.
+            </p>
           </div>
-        ))}
-      </motion.div>
 
-      <AnimatePresence mode="wait">
-        {tab === "employer" ? (
-          <motion.div
-            key="employer"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="space-y-6"
-          >
-            <div className="flex items-center gap-4 border-b border-white/5">
-              {(["active", "hired", "proposals", "completed"] as Status[]).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setStatus(s)}
-                  className={`pb-3 text-sm font-medium capitalize transition-colors ${
-                    status === s ? "text-white border-b-2 border-violet-500" : "text-white/50 hover:text-white/80"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-
-            {status === "proposals" ? (
-              <div className="space-y-4">
-                {mockProposals.map((proposal) => (
-                  <div key={proposal.id} className="glass-card p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 font-bold text-white">
-                          {proposal.freelancer.name.charAt(0)}
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-white">{proposal.freelancer.name}</h3>
-                          <p className="text-sm text-white/50">{proposal.freelancer.title}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-display text-lg font-bold text-white">{formatCurrency(proposal.bidAmount)}</p>
-                        <p className="text-xs text-white/50">{proposal.deliveryDays} days</p>
-                      </div>
-                    </div>
-                    <p className="mt-4 text-sm text-white/60">{proposal.coverLetter}</p>
-                    <div className="mt-4 flex items-center justify-between">
-                      <div className="flex items-center gap-4 text-xs text-white/50">
-                        <span className="flex items-center gap-1">
-                          <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
-                          {proposal.freelancer.rating}
-                        </span>
-                        <span>{proposal.freelancer.completedJobs} projects</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-white/70 hover:text-white transition-colors">
-                          View Profile
-                        </button>
-                        <button className="btn-primary px-3 py-1.5 text-xs">
-                          Hire
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="grid gap-5 sm:grid-cols-2">
-                {mockEmployerJobs.slice(0, status === "active" ? 3 : status === "hired" ? 1 : 2).map((job) => (
-                  <Link key={job.id} href={`/jobs/${job.id}`}>
-                    <div className="glass-card hover-lift p-6">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h3 className="font-display text-lg font-semibold text-white">{job.title}</h3>
-                          <p className="text-sm text-white/50 mt-1">{job.subcategory}</p>
-                        </div>
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-                          status === "completed" ? "bg-green-500/10 text-green-300 border border-green-500/20" : "bg-violet-500/10 text-violet-300 border border-violet-500/20"
-                        }`}>
-                          {status === "completed" ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-                          {status === "active" ? "Active" : status === "hired" ? "In Progress" : "Completed"}
-                        </span>
-                      </div>
-                      <div className="mt-4 flex items-center justify-between">
-                        <p className="font-display text-xl font-bold text-white">{formatCurrency(job.budget)}</p>
-                        <div className="flex items-center gap-1 text-sm text-white/50">
-                          <Users className="h-4 w-4" />
-                          <span>{job.applicants} applicants</span>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </motion.div>
-        ) : (
-          <motion.div
-            key="freelancer"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="space-y-6"
-          >
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {mockFreelancerProjects.map((project) => (
-                <div key={project.id} className="glass-card hover-lift p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h3 className="font-display text-lg font-semibold text-white">{project.title}</h3>
-                      <p className="text-sm text-white/50 mt-1">{project.client}</p>
-                    </div>
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-                      project.status === "completed" ? "bg-green-500/10 text-green-300 border border-green-500/20" : "bg-violet-500/10 text-violet-300 border border-violet-500/20"
-                    }`}>
-                      {project.status === "completed" ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-                      {project.status === "completed" ? "Completed" : "In Progress"}
-                    </span>
-                  </div>
-                  
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between text-xs text-white/50 mb-1">
-                      <span>Progress</span>
-                      <span>{project.progress}%</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-white/5">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-500 transition-all"
-                        style={{ width: `${project.progress}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-white/50">
-                      Earned: <span className="text-white font-semibold">{formatCurrency(project.earned)}</span>
-                    </p>
-                    <button className="flex items-center gap-1 text-xs text-violet-300 hover:text-violet-200">
-                      View Details
-                      <ArrowRight className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="glass-card p-6">
-              <h3 className="font-display text-lg font-semibold text-white mb-4">Recent Activity</h3>
-              <div className="space-y-4">
-                {[
-                  { action: "New proposal received", job: "Web3 Landing Page Design", time: "2 hours ago" },
-                  { action: "Milestone completed", job: "Brand Identity Package", time: "1 day ago" },
-                  { action: "Payment received", job: "React Dashboard", time: "3 days ago" },
-                ].map((activity, i) => (
-                  <div key={i} className="flex items-center gap-4 p-3 rounded-lg bg-white/[0.02]">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500/20 to-cyan-500/20">
-                      <FileText className="h-5 w-5 text-violet-400" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-white">{activity.action}</p>
-                      <p className="text-xs text-white/50">{activity.job}</p>
-                    </div>
-                    <span className="text-xs text-white/40">{activity.time}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          <div className="mt-8 pt-4 border-t border-white/5">
+            <Link href="/dashboard/freelancer" className="btn-secondary w-full flex items-center justify-center gap-2 text-sm py-3 border-cyan-500/30 text-cyan-200 hover:bg-cyan-500/10">
+              Vào Freelancer Dashboard <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowRight, Upload, Plus, X, Check, DollarSign, Clock, Users } from "lucide-react";
+import { ArrowRight, Plus, X, Check, DollarSign } from "lucide-react";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { useWalletStore } from "@/store/wallet-store";
 

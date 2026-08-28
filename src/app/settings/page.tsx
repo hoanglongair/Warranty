@@ -103,11 +103,10 @@ export default function SettingsPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as Tab)}
-              className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === tab.id
+              className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors ${activeTab === tab.id
                   ? "bg-white/[0.06] text-white"
                   : "text-white/60 hover:bg-white/[0.03] hover:text-white/80"
-              }`}
+                }`}
             >
               <tab.icon className="h-4 w-4" />
               {tab.label}
@@ -125,11 +124,11 @@ export default function SettingsPage() {
             {activeTab === "account" && (
               <div className="space-y-6">
                 <h2 className="font-display text-xl font-bold text-white">{t("settings.accountSettings")}</h2>
-                
+
                 <div className="flex items-center gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/5">
                   <div className="h-16 w-16 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center font-bold text-white text-xl overflow-hidden">
                     {avatar ? (
-                      <img src={avatar} alt={displayName} className="w-full h-full object-cover" />
+                      <Image src={avatar} alt={displayName} width={64} height={64} className="w-full h-full object-cover" />
                     ) : (
                       displayName.charAt(0)
                     )}
@@ -255,6 +254,7 @@ export default function SettingsPage() {
                             alt={provider}
                             width={28}
                             height={28}
+                            unoptimized
                           />
                         )}
                       </div>

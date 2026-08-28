@@ -8,9 +8,17 @@ datasource db {
 }
 
 enum Role {
-  CLIENT
   FREELANCER
-  BOTH
+  EMPLOYER
+  ADMIN
+}
+
+enum EmployerStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+  NOT_APPLIED
 }
 
 enum JobStatus {
@@ -27,57 +35,78 @@ enum ApplicationStatus {
 }
 
 enum ContractStatus {
-  CREATED
+  PENDING_DEPOSIT
   FUNDED
   IN_PROGRESS
   DISPUTED
   COMPLETED
   REFUNDED
+  CANCELLED
 }
 
 model User {
-  walletAddress String        @id @map("wallet_address")
-  role          Role          @default(BOTH)
-  name          String?
-  email         String?
-  avatar        String?
-  bio           String?
-  skills        String[]      @default([])
-  rating        Float         @default(5.0)
-  totalEarned   Float         @default(0) @map("total_earned")
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
+  walletAddress  String         @id @map("wallet_address")
+  role           Role           @default(FREELANCER)
+  employerStatus EmployerStatus @default(NONE) @map("employer_status")
+  name           String?
+  email          String?
+  avatar         String?
+  bio            String?
+  skills         String[]       @default([])
+  rating         Float          @default(5.0)
+  totalEarned    Float          @default(0) @map("total_earned")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
 
-  postedJobs    Job[]         @relation("ClientJobs")
-  applications  Application[] @relation("FreelancerApplications")
-  clientContracts Contract[]  @relation("ClientContracts")
-  freelancerContracts Contract[] @relation("FreelancerContracts")
+  postedJobs          Job[]             @relation("EmployerJobs")
+  applications        Application[]     @relation("FreelancerApplications")
+  employerContracts   Contract[]        @relation("EmployerContracts")
+  freelancerContracts Contract[]        @relation("FreelancerContracts")
+  employerRequest     EmployerRequest?
 
   @@map("users")
 }
 
+model EmployerRequest {
+  id            String         @id @default(cuid())
+  walletAddress String         @unique @map("wallet_address")
+  companyName   String         @map("company_name")
+  reason        String
+  status        EmployerStatus @default(PENDING)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  user          User           @relation(fields: [walletAddress], references: [walletAddress], onDelete: Cascade)
+
+  @@map("employer_requests")
+}
+
 model Job {
-  id            String      @id @default(cuid())
-  title         String
-  description   String
-  category      String
-  budget        Float
-  budgetType    String      @default("fixed") @map("budget_type") // fixed / hourly
-  tokenSymbol   String      @default("ETH") @map("token_symbol")
-  status        JobStatus   @default(OPEN)
-  location      String      @default("Remote")
-  deadline      String?
-  skills        String[]    @default([])
-  requirements  String[]    @default([])
-  deliverables  String[]    @default([])
-  clientAddress String      @map("client_address")
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
+  id              String      @id @default(cuid())
+  title           String
+  description     String
+  category        String
+  budget          Float
+  budgetType      String      @default("fixed") @map("budget_type") // fixed / hourly
+  tokenSymbol     String      @default("ETH") @map("token_symbol")
+  status          JobStatus   @default(OPEN)
+  location        String      @default("Remote")
+  deadline        String?
+  skills          String[]    @default([])
+  requirements    String[]    @default([])
+  deliverables    String[]    @default([])
+  employerAddress String      @map("employer_address")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
 
-  client        User        @relation("ClientJobs", fields: [clientAddress], references: [walletAddress], onDelete: Cascade)
-  applications  Application[]
-  contract      Contract?
+  employer     User         @relation("EmployerJobs", fields: [employerAddress], references: [walletAddress], onDelete: Cascade)
+  applications Application[]
+  contract     Contract?
 
+  @@index([employerAddress])
+  @@index([status])
+  @@index([category])
+  @@index([createdAt(sort: Desc)])
   @@map("jobs")
 }
 
@@ -92,9 +121,12 @@ model Application {
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
 
-  job               Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  freelancer        User              @relation("FreelancerApplications", fields: [freelancerAddress], references: [walletAddress], onDelete: Cascade)
+  job        Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  freelancer User @relation("FreelancerApplications", fields: [freelancerAddress], references: [walletAddress], onDelete: Cascade)
 
+  @@index([jobId])
+  @@index([freelancerAddress])
+  @@index([status])
   @@map("applications")
 }
 
@@ -102,19 +134,26 @@ model Contract {
   id                String         @id @default(cuid())
   jobId             String         @unique @map("job_id")
   escrowAddress     String?        @map("escrow_address")
-  clientAddress     String         @map("client_address")
+  employerAddress   String         @map("employer_address")
   freelancerAddress String         @map("freelancer_address")
   totalAmount       Float          @map("total_amount")
   tokenSymbol       String         @default("ETH") @map("token_symbol")
-  status            ContractStatus @default(CREATED)
+  status            ContractStatus @default(PENDING_DEPOSIT)
   txHash            String?        @map("tx_hash")
+  depositTxHash     String?        @map("deposit_tx_hash")
   arbitratorAddress String?        @map("arbitrator_address")
+  fundDeadline      DateTime?      @map("fund_deadline")
+  cancelledReason   String?        @map("cancelled_reason")
   createdAt         DateTime       @default(now()) @map("created_at")
   updatedAt         DateTime       @updatedAt @map("updated_at")
 
-  job               Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  client            User           @relation("ClientContracts", fields: [clientAddress], references: [walletAddress])
-  freelancer        User           @relation("FreelancerContracts", fields: [freelancerAddress], references: [walletAddress])
+  job        Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  employer   User @relation("EmployerContracts", fields: [employerAddress], references: [walletAddress])
+  freelancer User @relation("FreelancerContracts", fields: [freelancerAddress], references: [walletAddress])
 
+  @@index([employerAddress])
+  @@index([freelancerAddress])
+  @@index([status])
+  @@index([fundDeadline])
   @@map("contracts")
 }

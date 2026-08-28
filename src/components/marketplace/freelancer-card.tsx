@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import { Star, MapPin, Check, Clock, ArrowUpRight } from "lucide-react";
 import type { Freelancer } from "@/types";
@@ -31,7 +32,7 @@ export function FreelancerCard({ freelancer, index = 0 }: FreelancerCardProps) {
             <div className="relative -mt-10 mb-3 flex items-end justify-between">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl border-4 border-[hsl(var(--background))] bg-gradient-to-br from-violet-500 to-cyan-500 shadow-lg overflow-hidden">
                 {freelancer.avatar ? (
-                  <img src={freelancer.avatar} alt={freelancer.name} className="h-full w-full object-cover" />
+                  <Image src={freelancer.avatar} alt={freelancer.name} width={64} height={64} className="h-full w-full object-cover" />
                 ) : (
                   <span className="font-display text-xl font-bold text-white">{freelancer.name.charAt(0)}</span>
                 )}

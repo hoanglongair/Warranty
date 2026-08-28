@@ -161,6 +161,7 @@ export type WalletProvider = "metamask" | "walletconnect" | "coinbase" | "okx" |
 
 export interface WalletState {
   connected: boolean;
+  authenticated: boolean;
   address: string | null;
   provider: WalletProvider | null;
   balance: number;

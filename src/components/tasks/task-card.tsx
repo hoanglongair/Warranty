@@ -4,7 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { 
   Clock, Users, DollarSign, Star, CheckCircle2, 
-  Bookmark, BookmarkCheck, Zap, Shield, Timer
+  Zap, Timer
 } from "lucide-react";
 import type { Task } from "@/types/task";
 import { formatCurrency, timeAgo } from "@/lib/utils";

@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Search, ChevronDown } from "lucide-react";
+import { Menu, X, Search, ChevronDown, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { WalletButton } from "@/components/wallet/wallet-button";
+import { useWalletStore } from "@/store/wallet-store";
 import { LanguageSwitcher } from "@/components/language/language-switcher";
 import { useTranslation } from "@/i18n/translations";
 import { cn } from "@/lib/utils";
@@ -16,13 +17,10 @@ const primaryNavLinks = [
   { href: "/marketplace", key: "nav.marketplace" },
   { href: "/tasks", key: "nav.microTasks" },
   { href: "/post-job", key: "nav.postJob" },
-  { href: "/dashboard", key: "nav.dashboard" },
-  { href: "/wallet", key: "nav.wallet" },
-  { href: "/faucet", key: "nav.faucet" }
+  { href: "/dashboard", key: "nav.dashboard" }
 ];
 
 const secondaryNavLinks = [
-  { href: "/categories", key: "nav.categories" },
   { href: "/profile", key: "nav.profile" },
   { href: "/faq", key: "nav.faq" }
 ];
@@ -32,10 +30,6 @@ const allNavLinks = [
   { href: "/marketplace", key: "nav.marketplace" },
   { href: "/tasks", key: "nav.microTasks" },
   { href: "/post-job", key: "nav.postJob" },
-  { href: "/dashboard", key: "nav.dashboard" },
-  { href: "/wallet", key: "nav.wallet" },
-  { href: "/faucet", key: "nav.faucet" },
-  { href: "/categories", key: "nav.categories" },
   { href: "/profile", key: "nav.profile" },
   { href: "/faq", key: "nav.faq" }
 ];
@@ -44,8 +38,25 @@ export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const { address } = useWalletStore();
   const pathname = usePathname();
   const { t } = useTranslation();
+
+  useEffect(() => {
+    if (!address) {
+      setUserRole(null);
+      return;
+    }
+    fetch(`/api/profile/${address}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.profile) {
+          setUserRole(data.profile.role);
+        }
+      })
+      .catch(() => {});
+  }, [address]);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -111,6 +122,21 @@ export function Navbar() {
                 </li>
               );
             })}
+
+            {(userRole === "ADMIN" || pathname.startsWith("/admin")) && (
+              <li>
+                <Link
+                  href="/admin"
+                  className={cn(
+                    "flex items-center gap-1 rounded-lg border border-violet-500/40 bg-violet-500/10 px-2.5 py-1.5 text-xs font-semibold text-violet-300 transition-colors hover:bg-violet-500/20",
+                    pathname.startsWith("/admin") && "ring-1 ring-violet-400"
+                  )}
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  <span>Admin</span>
+                </Link>
+              </li>
+            )}
 
             {/* "More" Dropdown for Secondary Links */}
             <li className="relative">
@@ -186,7 +212,7 @@ export function Navbar() {
           >
             <Search className="h-4 w-4" />
           </Link>
-          
+
           <LanguageSwitcher />
 
           <div className="hidden sm:block">

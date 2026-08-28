@@ -154,8 +154,8 @@ export default function FAQPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 max-w-5xl mx-auto">
           {[
             { label: "Getting Started", href: "/", icon: Users },
-            { label: "How Payments Work", href: "/wallet", icon: CreditCard },
-            { label: "Wallet Connection", href: "/wallet", icon: Wallet },
+            { label: "Marketplace", href: "/marketplace", icon: CreditCard },
+            { label: "Dashboard", href: "/dashboard", icon: Wallet },
             { label: "Security Features", href: "/settings", icon: Lock },
           ].map((link) => (
             <Link

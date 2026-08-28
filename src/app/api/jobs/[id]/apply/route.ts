@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getAuthSession } from "@/lib/auth-guard";
 
 export async function POST(
   req: NextRequest,
@@ -8,13 +9,53 @@ export async function POST(
   try {
     const { id: jobId } = await params;
     const body = await req.json();
-    const { freelancerAddress, proposalBid, coverLetter, estimatedDays } = body;
+    const { proposalBid, coverLetter, estimatedDays } = body;
 
-    if (!freelancerAddress || !proposalBid || !coverLetter) {
+    const session = await getAuthSession(req);
+    if (!session) {
+      return NextResponse.json({ error: "Vui lòng đăng nhập ví để nộp đơn ứng tuyển." }, { status: 401 });
+    }
+
+    const walletAddress = session.walletAddress.toLowerCase();
+
+    if (!proposalBid || !coverLetter) {
       return NextResponse.json({ error: "Vui lòng nhập đầy đủ giá đề xuất và thư giới thiệu." }, { status: 400 });
     }
 
-    const walletAddress = freelancerAddress.toLowerCase();
+    if (Number(proposalBid) <= 0) {
+      return NextResponse.json({ error: "Giá đề xuất chào thầu phải lớn hơn 0." }, { status: 400 });
+    }
+
+    // 1. Kiểm tra Job có tồn tại và ngăn Employer tự ứng tuyển dự án của chính mình
+    const job = await prisma.job.findUnique({
+      where: { id: jobId }
+    });
+
+    if (!job) {
+      return NextResponse.json({ error: "Không tìm thấy bài đăng dự án này." }, { status: 404 });
+    }
+
+    if (job.employerAddress.toLowerCase() === walletAddress) {
+      return NextResponse.json(
+        { error: "Bạn là chủ bài đăng dự án này (Employer). Không thể tự ứng tuyển bài đăng của chính mình." },
+        { status: 400 }
+      );
+    }
+
+    // 2. Check duplicate application
+    const existingApp = await prisma.application.findFirst({
+      where: {
+        jobId,
+        freelancerAddress: walletAddress
+      }
+    });
+
+    if (existingApp) {
+      return NextResponse.json(
+        { error: "Bạn đã gửi ứng tuyển cho dự án này rồi. Không thể gửi trùng lặp." },
+        { status: 400 }
+      );
+    }
 
     // Đảm bảo Freelancer User tồn tại trong CSDL
     await prisma.user.upsert({

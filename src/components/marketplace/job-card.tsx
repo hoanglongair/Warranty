@@ -29,7 +29,7 @@ export function JobCard({ job, index = 0 }: JobCardProps) {
   const { bookmarkedJobs, bookmarkJob, unbookmarkJob } = useJobStore();
   const isBookmarked = bookmarkedJobs.includes(job.id);
 
-  const employerName = job.employer?.name || job.client?.name || (job.clientAddress ? `User ${job.clientAddress.slice(0, 6)}...` : "Client");
+  const employerName = job.employer?.name || job.client?.name || (job.employerAddress || job.clientAddress ? `User ${(job.employerAddress || job.clientAddress).slice(0, 6)}...` : "Employer");
   const employerRating = job.employer?.rating || 5.0;
   const employerJobs = job.employer?.jobsPosted || 1;
   const experienceText = experienceLabels[job.experience] || "Intermediate";

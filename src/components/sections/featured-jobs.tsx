@@ -1,13 +1,24 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
-import { jobs } from "@/data/jobs";
 import { JobCard } from "@/components/marketplace/job-card";
 
 export function FeaturedJobs() {
-  const featuredJobs = jobs.slice(0, 6);
+  const [jobsList, setJobsList] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("/api/jobs")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.jobs) setJobsList(data.jobs.slice(0, 6));
+      })
+      .catch((err) => console.error("Featured jobs error:", err));
+  }, []);
+
+  const featuredJobs = jobsList;
 
   return (
     <section className="relative py-24">

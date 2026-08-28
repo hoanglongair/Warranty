@@ -6,14 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint --dir src"
+    "lint": "next lint --dir src",
+    "hardhat": "hardhat",
+    "compile": "hardhat compile",
+    "deploy:arcTestnet": "hardhat run scripts/deploy.js --network arcTestnet",
+    "deploy:arcMainnet": "hardhat run scripts/deploy.js --network arcMainnet",
+    "deploy:local": "hardhat run scripts/deploy.js --network hardhat",
+    "test:hardhat": "hardhat run scripts/test-escrow.js --network hardhat"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
     "@prisma/client": "^6.19.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
-    "ethers": "^6.17.0",
     "framer-motion": "^11.11.17",
     "gsap": "^3.12.5",
     "jose": "^6.2.8",
@@ -30,16 +35,25 @@
     "zustand": "^5.0.1"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^3.1.0",
+    "@openzeppelin/contracts": "^5.6.1",
+    "@types/chai": "^4.3.20",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^22.9.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.20",
+    "chai": "^4.5.0",
+    "dotenv": "^17.4.2",
     "eslint": "^9.14.0",
     "eslint-config-next": "^15.1.4",
+    "ethers": "^6.17.0",
+    "hardhat": "^2.22.19",
     "postcss": "^8.4.49",
     "prisma": "^6.19.3",
     "tailwindcss": "^3.4.14",
+    "ts-node": "^10.9.2",
     "typescript": "^5.6.3"
   }
 }

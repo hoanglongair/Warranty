@@ -1,17 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { 
-  ShieldCheck, 
-  Lock, 
-  CheckCircle2, 
-  Send, 
-  AlertTriangle, 
-  DollarSign, 
-  ExternalLink,
+import { useState, useEffect } from "react";
+import {
+  ShieldCheck,
+  Lock,
+  CheckCircle2,
+  Send,
+  AlertTriangle,
   Loader2,
   Clock,
-  ArrowRight
+  UserCheck
 } from "lucide-react";
 import { useWalletStore } from "@/store/wallet-store";
 import { depositEscrowOnChain, releasePaymentOnChain, raiseDisputeOnChain } from "@/lib/escrow-contract";
@@ -22,35 +20,53 @@ interface EscrowActionCardProps {
   onRefresh?: () => void;
 }
 
+// Đếm ngược deadline cọc
+function useCountdown(deadline?: string | Date | null): { hours: number; expired: boolean } {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!deadline) return;
+    const interval = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, [deadline]);
+
+  if (!deadline) return { hours: 0, expired: false };
+  const ms = new Date(deadline).getTime() - now;
+  if (ms <= 0) return { hours: 0, expired: true };
+  return { hours: Math.ceil(ms / (1000 * 60 * 60)), expired: false };
+}
+
 export function EscrowActionCard({ job, onRefresh }: EscrowActionCardProps) {
   const { address, provider, connected } = useWalletStore();
-  
+
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
-  
+
   const [deliverableNote, setDeliverableNote] = useState("");
   const [deliverableLink, setDeliverableLink] = useState("");
   const [showSubmitModal, setShowSubmitModal] = useState(false);
 
   const contract = job.contract;
   const currentAddr = (address || "").toLowerCase();
-  
-  const clientAddress = (contract?.clientAddress || job.clientAddress || job.employer?.walletAddress || "").toLowerCase();
+
+  const employerAddress = (contract?.employerAddress || contract?.clientAddress || job.employerAddress || job.clientAddress || job.employer?.walletAddress || "").toLowerCase();
   const freelancerAddress = (contract?.freelancerAddress || "").toLowerCase();
 
-  const isClient = connected && currentAddr !== "" && currentAddr === clientAddress;
+  const isEmployer = connected && currentAddr !== "" && currentAddr === employerAddress;
   const isFreelancer = connected && currentAddr !== "" && currentAddr === freelancerAddress;
 
   const rawJobStatus = (job?.status || "").toString().toUpperCase();
   const status = contract?.status || (rawJobStatus === "IN_PROGRESS" || rawJobStatus === "FUNDED" ? "FUNDED" : rawJobStatus === "COMPLETED" ? "COMPLETED" : "OPEN");
   const budget = contract?.totalAmount || job.budget;
   const tokenSymbol = contract?.tokenSymbol || job.tokenSymbol || "USDC";
+  const fundDeadline = contract?.fundDeadline;
+  const countdown = useCountdown(fundDeadline);
 
-  // 1. Bên A Nạp cọc (Fund Escrow)
-  const handleFundEscrow = async () => {
+  // 1. Employer Chấp nhận freelancer + tạo hợp đồng PENDING_DEPOSIT
+  const handleHire = async (selectedFreelancerAddress: string, proposalBid: number) => {
     if (!connected) {
-      setErrorMsg("Vui lòng kết nối ví Web3 trước khi thực hiện.");
+      setErrorMsg("Vui lòng kết nối ví Web3 trước.");
       return;
     }
     setLoading(true);
@@ -58,21 +74,58 @@ export function EscrowActionCard({ job, onRefresh }: EscrowActionCardProps) {
     setSuccessMsg("");
 
     try {
-      // Call Web3 deposit
-      const txHash = await depositEscrowOnChain(
-        provider || "metamask",
-        job.id,
-        freelancerAddress || "0x0000000000000000000000000000000000000000",
-        budget.toString()
-      );
-
-      // Call API update
       const res = await fetch(`/api/jobs/${job.id}/hire`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientAddress: currentAddr,
-          freelancerAddress: freelancerAddress || "0x0000000000000000000000000000000000000000",
+          employerAddress: currentAddr,
+          freelancerAddress: selectedFreelancerAddress,
+          proposalBid,
+          tokenSymbol,
+          status: "PENDING_DEPOSIT"
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Không thể chấp nhận freelancer.");
+
+      setSuccessMsg("✅ Đã chấp nhận freelancer. Hãy nạp cọc Escrow trong vòng 72 giờ.");
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      setErrorMsg(err.message || "Lỗi khi chấp nhận freelancer.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 2. Bên A Nạp cọc (Fund Escrow) — chỉ gọi khi contract.status = PENDING_DEPOSIT
+  const handleFundEscrow = async () => {
+    if (!connected) {
+      setErrorMsg("Vui lòng kết nối ví Web3 trước khi thực hiện.");
+      return;
+    }
+    if (!freelancerAddress || freelancerAddress === "0x0000000000000000000000000000000000000000") {
+      setErrorMsg("Chưa có freelancer được chấp nhận. Không thể nạp cọc.");
+      return;
+    }
+    setLoading(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    try {
+      const txHash = await depositEscrowOnChain(
+        provider || "metamask",
+        job.id,
+        freelancerAddress,
+        budget.toString()
+      );
+
+      const res = await fetch(`/api/jobs/${job.id}/hire`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employerAddress: currentAddr,
+          freelancerAddress,
           proposalBid: budget,
           tokenSymbol,
           txHash,
@@ -95,7 +148,7 @@ export function EscrowActionCard({ job, onRefresh }: EscrowActionCardProps) {
     }
   };
 
-  // 2. Bên B Bàn giao sản phẩm (Submit Deliverable)
+  // 3. Bên B Bàn giao sản phẩm (Submit Deliverable)
   const handleSubmitDeliverable = async () => {
     if (!deliverableNote && !deliverableLink) {
       setErrorMsg("Vui lòng nhập ghi chú hoặc đường dẫn mô tả sản phẩm.");
@@ -129,7 +182,7 @@ export function EscrowActionCard({ job, onRefresh }: EscrowActionCardProps) {
     }
   };
 
-  // 3. Bên A Nghiệm thu & Giải ngân (Release Payment)
+  // 4. Bên A Nghiệm thu & Giải ngân (Release Payment)
   const handleReleasePayment = async () => {
     if (!connected) {
       setErrorMsg("Vui lòng kết nối ví Web3.");
@@ -146,7 +199,7 @@ export function EscrowActionCard({ job, onRefresh }: EscrowActionCardProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientAddress: currentAddr,
+          employerAddress: currentAddr,
           releaseTxHash: txHash
         })
       });
@@ -163,7 +216,7 @@ export function EscrowActionCard({ job, onRefresh }: EscrowActionCardProps) {
     }
   };
 
-  // 4. Kích hoạt Tranh chấp (Raise Dispute)
+  // 5. Kích hoạt Tranh chấp (Raise Dispute)
   const handleRaiseDispute = async () => {
     if (!confirm("Bạn có chắc chắn muốn kích hoạt Tranh chấp? Trọng tài sàn sẽ vào phân xử.")) return;
     setLoading(true);
@@ -225,7 +278,7 @@ export function EscrowActionCard({ job, onRefresh }: EscrowActionCardProps) {
         <div className="border-l border-white/5 pl-3">
           <span className="text-white/40 block text-[10px]">Vai trò ví kết nối</span>
           <span className="font-semibold text-violet-300 block mt-1 truncate">
-            {isClient ? "👑 Bên A (Người Thuê)" : isFreelancer ? "🛠️ Bên B (Freelancer)" : "👁️ Người Xem"}
+            {isEmployer ? "👑 Employer (Người Thuê)" : isFreelancer ? "🛠️ Freelancer" : "👁️ Người Xem"}
           </span>
         </div>
       </div>
@@ -264,29 +317,97 @@ export function EscrowActionCard({ job, onRefresh }: EscrowActionCardProps) {
           </div>
         )}
 
-        {/* CASE 3: OPEN (Chờ Bên A nạp cọc) */}
+        {/* CASE 3: CANCELLED (auto-cancel do quá hạn nạp cọc) */}
+        {status === "CANCELLED" && (
+          <div className="rounded-xl border border-white/20 bg-white/[0.03] p-4 text-center">
+            <Clock className="h-8 w-8 text-white/50 mx-auto mb-2" />
+            <h5 className="font-bold text-white text-sm">Hợp đồng đã bị hủy</h5>
+            <p className="text-xs text-white/60 mt-1">
+              {isEmployer
+                ? "Bạn đã không nạp cọc trong thời hạn cho phép. Job đã được mở lại Marketplace để tuyển freelancer khác."
+                : "Bên A không nạp cọc trong thời hạn quy định. Hợp đồng đã được hủy tự động."}
+            </p>
+          </div>
+        )}
+
+        {/* CASE 4: OPEN (Job mới — chưa có freelancer được chọn) */}
         {status === "OPEN" && (
           <div className="space-y-3">
-            {isClient ? (
-              <button
-                onClick={handleFundEscrow}
-                disabled={loading}
-                className="btn-primary w-full flex items-center justify-center gap-2 py-3"
-              >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
-                Nạp Cọc Smart Contract (${budget.toLocaleString("en-US")} {tokenSymbol})
-              </button>
+            {isEmployer ? (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-center">
+                <UserCheck className="h-8 w-8 text-amber-300 mx-auto mb-2" />
+                <h5 className="font-bold text-white text-sm">Chờ Freelancer ứng tuyển</h5>
+                <p className="text-xs text-white/60 mt-1">
+                  Bài đăng của bạn đang hiển thị trên Marketplace. Sau khi có freelancer ứng tuyển và bạn chọn được người phù hợp, hãy nhấn nút <strong>Chấp nhận</strong> để tạo hợp đồng, sau đó nạp cọc Escrow.
+                </p>
+              </div>
             ) : (
               <p className="text-xs text-white/50 text-center py-2 bg-white/[0.02] rounded-xl">
-                {isFreelancer 
-                  ? "Vui lòng chờ Bên A (Người thuê) thực hiện nạp cọc Escrow để bắt đầu dự án." 
-                  : "Dự án đang chờ Bên A nạp cọc khởi tạo hợp đồng Escrow."}
+                Dự án đang mở nhận đơn ứng tuyển. Hãy nộp đơn nếu bạn quan tâm.
               </p>
             )}
           </div>
         )}
 
-        {/* CASE 4: FUNDED (Đã khóa tiền - Chờ Bên B làm & bàn giao) */}
+        {/* CASE 5: PENDING_DEPOSIT (Đã hire freelancer — chờ nạp cọc) */}
+        {status === "PENDING_DEPOSIT" && (
+          <div className="space-y-3">
+            {isEmployer ? (
+              <>
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+                  <p className="font-semibold flex items-center gap-1.5">
+                    <UserCheck className="h-3.5 w-3.5" /> Đã chọn Freelancer
+                  </p>
+                  <p className="mt-1 font-mono text-white/80 break-all text-[10px]">{freelancerAddress}</p>
+                  {!countdown.expired && (
+                    <p className="mt-2 text-amber-300">
+                      ⏰ Còn <strong>{countdown.hours} giờ</strong> để nạp cọc — nếu không hợp đồng sẽ tự hủy.
+                    </p>
+                  )}
+                  {countdown.expired && (
+                    <p className="mt-2 text-red-300">
+                      ⚠️ Đã quá hạn nạp cọc. Hợp đồng sẽ được hệ thống tự động hủy trong ít phút tới.
+                    </p>
+                  )}
+                </div>
+                {!countdown.expired && (
+                  <button
+                    onClick={handleFundEscrow}
+                    disabled={loading}
+                    className="btn-primary w-full flex items-center justify-center gap-2 py-3"
+                  >
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+                    Nạp Cọc Smart Contract (${budget.toLocaleString("en-US")} {tokenSymbol})
+                  </button>
+                )}
+              </>
+            ) : isFreelancer ? (
+              <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-center">
+                <Clock className="h-8 w-8 text-cyan-300 mx-auto mb-2" />
+                <h5 className="font-bold text-white text-sm">Đang chờ Bên A nạp cọc</h5>
+                <p className="text-xs text-white/70 mt-1">
+                  Bạn đã được chấp nhận. Hãy đợi Employer nạp cọc Escrow trước khi bắt đầu công việc.
+                </p>
+                {!countdown.expired && (
+                  <p className="text-xs text-cyan-300 mt-2">
+                    ⏰ Còn <strong>{countdown.hours} giờ</strong> — nếu Employer không nạp cọc, hợp đồng sẽ tự hủy.
+                  </p>
+                )}
+                {countdown.expired && (
+                  <p className="text-xs text-red-300 mt-2">
+                    ⚠️ Đã quá hạn. Bạn có thể ứng tuyển job khác.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-white/50 text-center py-2 bg-white/[0.02] rounded-xl">
+                Hợp đồng đang ở trạng thái chờ nạp cọc.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* CASE 6: FUNDED (Đã khóa tiền - Chờ Bên B làm & bàn giao) */}
         {status === "FUNDED" && (
           <div className="space-y-3">
             {isFreelancer ? (
@@ -298,7 +419,7 @@ export function EscrowActionCard({ job, onRefresh }: EscrowActionCardProps) {
                 <Send className="h-4 w-4" />
                 Nộp Sản Phẩm Bàn Giao
               </button>
-            ) : isClient ? (
+            ) : isEmployer ? (
               <div className="space-y-2">
                 <p className="text-xs text-white/60 bg-cyan-500/5 border border-cyan-500/20 p-3 rounded-xl">
                   🔒 Tiền cọc <strong>${budget.toLocaleString("en-US")} {tokenSymbol}</strong> đang được khóa an toàn trên Smart Contract. Đang chờ Bên B nộp sản phẩm bàn giao.
@@ -320,10 +441,10 @@ export function EscrowActionCard({ job, onRefresh }: EscrowActionCardProps) {
           </div>
         )}
 
-        {/* CASE 5: IN_PROGRESS (Đã bàn giao sản phẩm - Chờ Bên A nghiệm thu) */}
+        {/* CASE 7: IN_PROGRESS (Đã bàn giao sản phẩm - Chờ Bên A nghiệm thu) */}
         {status === "IN_PROGRESS" && (
           <div className="space-y-3">
-            {isClient ? (
+            {isEmployer ? (
               <div className="space-y-3">
                 <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl text-xs text-amber-200">
                   <p className="font-semibold mb-1 flex items-center gap-1">
@@ -353,7 +474,7 @@ export function EscrowActionCard({ job, onRefresh }: EscrowActionCardProps) {
             ) : isFreelancer ? (
               <div className="bg-cyan-500/10 border border-cyan-500/20 p-3 rounded-xl text-xs text-cyan-200 text-center">
                 <p className="font-semibold">Đã nộp sản phẩm thành công!</p>
-                <p className="text-white/70 mt-1">Đang chờ Bên A (Người Thuê) kiểm tra nghiệm thu và bấm giải ngân.</p>
+                <p className="text-white/70 mt-1">Đang chờ Bên A (Employer) kiểm tra nghiệm thu và bấm giải ngân.</p>
               </div>
             ) : (
               <p className="text-xs text-white/50 text-center py-2 bg-white/[0.02] rounded-xl">

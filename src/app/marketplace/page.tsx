@@ -7,14 +7,12 @@ import {
   SlidersHorizontal,
   X,
   Briefcase,
-  Users,
-  ChevronDown
+  Users
 } from "lucide-react";
-import { jobs as staticJobs } from "@/data/jobs";
 import { categories } from "@/data/jobs";
 import { JobCard } from "@/components/marketplace/job-card";
 import { FreelancerCard } from "@/components/marketplace/freelancer-card";
-import { freelancers } from "@/data/freelancers";
+import { JobCardSkeleton, FreelancerCardSkeleton } from "@/components/marketplace/marketplace-skeleton";
 import { cn } from "@/lib/utils";
 import { useJobStore } from "@/store/job-store";
 import { CustomSelect } from "@/components/ui/custom-select";
@@ -31,13 +29,26 @@ export default function MarketplacePage() {
   const [sortBy, setSortBy] = useState<SortBy>("newest");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const { jobs: apiJobs, fetchJobs, isLoading } = useJobStore();
+  const { jobs: apiJobs, fetchJobs, isLoading: jobsLoading } = useJobStore();
+  const [freelancersList, setFreelancersList] = useState<any[]>([]);
+  const [freelancersLoading, setFreelancersLoading] = useState(true);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   useEffect(() => {
-    fetchJobs();
-  }, []);
+    fetchJobs().finally(() => setInitialLoadDone(true));
+    fetch("/api/freelancers")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.freelancers) {
+          setFreelancersList(data.freelancers);
+        }
+      })
+      .catch((err) => console.error("Fetch freelancers error:", err))
+      .finally(() => setFreelancersLoading(false));
+  }, [fetchJobs]);
 
-  const activeJobsList = apiJobs && apiJobs.length > 0 ? apiJobs : staticJobs;
+  const activeJobsList = apiJobs || [];
+  const isInitialLoading = (jobsLoading || !initialLoadDone) && freelancersLoading;
 
   const filteredJobs = activeJobsList
     .filter((job) => {
@@ -56,11 +67,11 @@ export default function MarketplacePage() {
       return (b.applicants || 0) - (a.applicants || 0);
     });
 
-  const filteredFreelancers = freelancers.filter((freelancer) => {
+  const filteredFreelancers = freelancersList.filter((freelancer) => {
     if (
       search &&
       !freelancer.name.toLowerCase().includes(search.toLowerCase()) &&
-      !freelancer.title.toLowerCase().includes(search.toLowerCase())
+      !freelancer.role.toLowerCase().includes(search.toLowerCase())
     ) {
       return false;
     }
@@ -288,7 +299,12 @@ export default function MarketplacePage() {
             ? `${filteredJobs.length} jobs available`
             : `${filteredFreelancers.length} freelancers available`}
         </p>
-        {isLoading && <span className="text-xs text-violet-400 animate-pulse">Đang tải dữ liệu từ CSDL...</span>}
+        {(jobsLoading || freelancersLoading) && (
+          <span className="inline-flex items-center gap-2 text-xs text-violet-300">
+            <span className="h-2 w-2 rounded-full bg-violet-400 animate-ping" />
+            Đang tải dữ liệu từ CSDL...
+          </span>
+        )}
       </div>
 
       <AnimatePresence mode="wait">
@@ -301,9 +317,11 @@ export default function MarketplacePage() {
             transition={{ duration: 0.3 }}
             className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
           >
-            {filteredJobs.map((job: any, i: number) => (
-              <JobCard key={job.id} job={job} index={i} />
-            ))}
+            {jobsLoading && activeJobsList.length === 0
+              ? Array.from({ length: 6 }).map((_, i) => <JobCardSkeleton key={`job-skeleton-${i}`} />)
+              : filteredJobs.map((job: any, i: number) => (
+                  <JobCard key={job.id} job={job} index={i} />
+                ))}
           </motion.div>
         ) : (
           <motion.div
@@ -314,19 +332,23 @@ export default function MarketplacePage() {
             transition={{ duration: 0.3 }}
             className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
           >
-            {filteredFreelancers.map((freelancer, i) => (
-              <FreelancerCard
-                key={freelancer.id}
-                freelancer={freelancer}
-                index={i}
-              />
-            ))}
+            {freelancersLoading && freelancersList.length === 0
+              ? Array.from({ length: 6 }).map((_, i) => (
+                  <FreelancerCardSkeleton key={`freelancer-skeleton-${i}`} />
+                ))
+              : filteredFreelancers.map((freelancer, i) => (
+                  <FreelancerCard
+                    key={freelancer.id}
+                    freelancer={freelancer}
+                    index={i}
+                  />
+                ))}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {((tab === "posters" && filteredJobs.length === 0) ||
-        (tab === "freelancers" && filteredFreelancers.length === 0)) && (
+      {((tab === "posters" && filteredJobs.length === 0 && !jobsLoading) ||
+        (tab === "freelancers" && filteredFreelancers.length === 0 && !freelancersLoading)) && (
         <div className="glass-card py-16 text-center">
           <p className="text-lg text-white/60">No results found</p>
           <p className="mt-1 text-sm text-white/40">

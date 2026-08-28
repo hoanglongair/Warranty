@@ -17,6 +17,7 @@ interface WalletStore extends WalletState {
     balance: number;
     realConnection: boolean;
   }) => void;
+  setAuthenticated: (authenticated: boolean) => void;
   setBalance: (balance: number) => void;
   setChainId: (chainId: number) => void;
   setStoreConnecting: (connecting: boolean) => void;
@@ -94,6 +95,7 @@ export const useWalletStore = create<WalletStore>()(
   persist(
     (set, get) => ({
       connected: false,
+      authenticated: false,
       address: null,
       provider: null,
       balance: 0,
@@ -106,6 +108,7 @@ export const useWalletStore = create<WalletStore>()(
       connect: (provider, address) =>
         set({
           connected: true,
+          authenticated: true,
           provider,
           address,
           balance: 4.825,
@@ -125,13 +128,17 @@ export const useWalletStore = create<WalletStore>()(
           ensName: undefined,
           error: null
         }),
+      setAuthenticated: (authenticated) => set({ authenticated }),
       setBalance: (balance) => set({ balance }),
       setChainId: (chainId) => set({ chainId }),
       setStoreConnecting: (connecting) => set({ connecting }),
       setError: (error) => set({ error }),
-      disconnect: () =>
+      disconnect: () => {
+        // Trigger server-side logout & clear cookies/tokens asynchronously
+        import("@/lib/siwe-auth").then(({ logoutSiwe }) => logoutSiwe());
         set({
           connected: false,
+          authenticated: false,
           address: null,
           provider: null,
           balance: 0,
@@ -139,7 +146,8 @@ export const useWalletStore = create<WalletStore>()(
           ensName: undefined,
           realConnection: false,
           error: null
-        }),
+        });
+      },
       addTransaction: (tx) =>
         set((state) => ({ transactions: [tx, ...state.transactions] })),
       refreshRealtimeBalance: async () => {
@@ -160,6 +168,7 @@ export const useWalletStore = create<WalletStore>()(
       name: "warranty-wallet",
       partialize: (state) => ({
         connected: state.connected,
+        authenticated: state.authenticated,
         address: state.address,
         chainId: state.chainId,
         balance: state.balance,

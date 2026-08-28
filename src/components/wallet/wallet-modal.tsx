@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Wallet, Shield, Zap, AlertCircle, ExternalLink } from "lucide-react";
+import { X, Shield, Zap, AlertCircle, ExternalLink } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -17,6 +17,7 @@ import {
   requestAccounts,
   watchWallet
 } from "@/lib/wallet-connect";
+import { loginWithSiwe } from "@/lib/siwe-auth";
 import type { WalletProvider } from "@/types";
 
 interface WalletModalProps {
@@ -34,68 +35,52 @@ const wallets: Array<{
   popular: boolean;
   installUrl?: string;
 }> = [
-  {
-    id: "metamask",
-    name: "MetaMask",
-    description: "Connect using browser extension",
-    icon: "/wallets/metamask.png",
-    popular: true,
-    installUrl: "https://metamask.io/download/"
-  },
-  {
-    id: "okx",
-    name: "OKX Wallet",
-    description: "Connect with OKX Web3 wallet",
-    icon: "/wallets/okx.png",
-    popular: true,
-    installUrl: "https://www.okx.com/web3"
-  },
-  {
-    id: "walletconnect",
-    name: "WalletConnect",
-    description: "Scan QR code with mobile wallet (chưa hỗ trợ demo)",
-    icon: "/wallets/walletconnect.svg",
-    popular: true
-  },
-  {
-    id: "coinbase",
-    name: "Coinbase Wallet",
-    description: "Connect with your Coinbase account",
-    icon: "/wallets/coinbase.png",
-    popular: false,
-    installUrl: "https://www.coinbase.com/wallet/downloads"
-  },
-  {
-    id: "trust",
-    name: "Trust Wallet",
-    description: "Connect with Trust Wallet",
-    icon: "/wallets/trust.png",
-    popular: false,
-    installUrl: "https://trustwallet.com/browser-extension"
-  },
-  {
-    id: "phantom",
-    name: "Phantom",
-    description: "Connect with Phantom (EVM mode)",
-    icon: "/wallets/phantom.png",
-    popular: false,
-    installUrl: "https://phantom.app/"
-  },
-  {
-    id: "binance",
-    name: "Binance Web3",
-    description: "Connect with Binance Web3 wallet",
-    icon: "/wallets/binance.png",
-    popular: false,
-    installUrl: "https://www.binance.com/en/web3wallet"
-  }
-];
+    {
+      id: "metamask",
+      name: "MetaMask",
+      description: "Connect using browser extension",
+      icon: "/wallets/metamask.png",
+      popular: true,
+      installUrl: "https://metamask.io/download/"
+    },
+    {
+      id: "okx",
+      name: "OKX Wallet",
+      description: "Connect with OKX Web3 wallet",
+      icon: "/wallets/okx.png",
+      popular: true,
+      installUrl: "https://www.okx.com/web3"
+    },
+    {
+      id: "walletconnect",
+      name: "WalletConnect",
+      description: "Scan QR code with mobile wallet (chưa hỗ trợ demo)",
+      icon: "/wallets/walletconnect.svg",
+      popular: true
+    },
+    {
+      id: "coinbase",
+      name: "Coinbase Wallet",
+      description: "Connect with your Coinbase account",
+      icon: "/wallets/coinbase.png",
+      popular: false,
+      installUrl: "https://www.coinbase.com/wallet/downloads"
+    },
+    {
+      id: "phantom",
+      name: "Phantom",
+      description: "Connect with Phantom (EVM mode)",
+      icon: "/wallets/phantom.png",
+      popular: false,
+      installUrl: "https://phantom.app/"
+    },
+  ];
 
 export function WalletModal({ open, onClose }: WalletModalProps) {
   const [connecting, setConnecting] = useState<WalletId | null>(null);
   const [installedMap, setInstalledMap] = useState<Record<string, boolean>>({});
   const [mounted, setMounted] = useState(false);
-  const { connect, setConnection, setBalance, setChainId, setStoreConnecting, setError, error } =
+  const { setConnection, setAuthenticated, setChainId, setError, error } =
     useWalletStore();
 
   useEffect(() => {
@@ -163,6 +148,8 @@ export function WalletModal({ open, onClose }: WalletModalProps) {
   }, [open, onClose]);
 
   const handleConnect = async (walletId: WalletId) => {
+    console.log("[WalletModal] handleConnect called with:", walletId);
+    
     if (walletId === "walletconnect") {
       setError("WalletConnect cần cấu hình projectId. Vui lòng chọn ví extension khác.");
       return;
@@ -171,7 +158,9 @@ export function WalletModal({ open, onClose }: WalletModalProps) {
     setError(null);
 
     try {
+      console.log("[WalletModal] 1. Requesting accounts...");
       const accounts = await requestAccounts(walletId as WalletProvider);
+      console.log("[WalletModal] 2. Got accounts, count:", accounts.length);
       const address = accounts[0];
 
       try {
@@ -189,6 +178,23 @@ export function WalletModal({ open, onClose }: WalletModalProps) {
         balance = formatBalanceWeiToEth(wei);
       } catch {
         balance = 0;
+      }
+
+      // Gọi SIWE sign-in bắt buộc để xác thực người dùng & set JWT cookie
+      console.log("[WalletModal] 3. Requesting SIWE signature from user...");
+      try {
+        await loginWithSiwe(walletId as WalletProvider, address);
+        console.log("[WalletModal] 4. SIWE verification SUCCESS -> User authenticated!");
+      } catch (siweErr) {
+        // Ngắt kết nối dở dang nếu người dùng từ chối ký hoặc xác thực lỗi
+        useWalletStore.getState().disconnect();
+        const errObj = siweErr as { code?: number; message?: string };
+        if (errObj?.code === 4001 || String(siweErr).includes("rejected")) {
+          console.warn("[WalletModal] User rejected signature request.");
+          throw new Error("Bạn đã từ chối yêu cầu xác thực đăng nhập trên ví.");
+        }
+        console.error("[WalletModal] SIWE verification failed:", siweErr);
+        throw new Error("Xác thực chữ ký đăng nhập thất bại. Vui lòng thử lại.");
       }
 
       setConnection({
@@ -232,6 +238,12 @@ export function WalletModal({ open, onClose }: WalletModalProps) {
       onClose();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Không thể kết nối ví.";
+      const errObj = err as { code?: number; message?: string };
+      if (errObj?.code === 4001 || message.includes("từ chối")) {
+        console.warn("[WalletModal] Connection cancelled by user.");
+      } else {
+        console.error("[WalletModal] Connect error:", err);
+      }
       setError(message);
     } finally {
       setConnecting(null);
@@ -322,6 +334,7 @@ export function WalletModal({ open, onClose }: WalletModalProps) {
                               alt={wallet.name}
                               width={32}
                               height={32}
+                              unoptimized
                               className="h-6 w-6 sm:h-8 sm:w-8 object-contain"
                             />
                           </div>

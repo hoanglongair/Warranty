@@ -5,8 +5,8 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { 
   ArrowLeft, Clock, DollarSign, Users, CheckCircle2, Star,
-  Calendar, MapPin, Shield, Zap, FileText, Upload, Send,
-  AlertCircle, Timer, Award, Bookmark, Share2, Eye
+  Calendar, MapPin, Shield, Zap, FileText, Send,
+  AlertCircle, Award, Share2, Bookmark
 } from "lucide-react";
 import { tasks } from "@/data/tasks";
 import { formatCurrency, timeAgo } from "@/lib/utils";

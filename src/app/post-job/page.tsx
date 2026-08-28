@@ -1,17 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowRight, Upload, Plus, X, Check, CheckCircle2 } from "lucide-react";
+import { Plus, X, Check, CheckCircle2 } from "lucide-react";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { useWalletStore } from "@/store/wallet-store";
 import { useJobStore } from "@/store/job-store";
 import { CustomSelect } from "@/components/ui/custom-select";
-import { depositEscrowOnChain } from "@/lib/escrow-contract";
 
 const jobSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters"),
@@ -56,11 +55,72 @@ export default function PostJobPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [escrowTxHash, setEscrowTxHash] = useState<string>("");
   const [postError, setPostError] = useState<string>("");
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [employerReqStatus, setEmployerReqStatus] = useState<string>("NONE");
+  const [checkingRole, setCheckingRole] = useState<boolean>(true);
+  const [companyName, setCompanyName] = useState<string>("");
+  const [reqReason, setReqReason] = useState<string>("");
+  const [reqSubmitting, setReqSubmitting] = useState<boolean>(false);
+  const [reqMessage, setReqMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   const { addJob } = useJobStore();
-  const { connected, address, provider } = useWalletStore();
+  const { connected, address } = useWalletStore();
+
+  useEffect(() => {
+    async function checkRole() {
+      if (!address) {
+        setUserRole(null);
+        setCheckingRole(false);
+        return;
+      }
+      setCheckingRole(true);
+      try {
+        const res = await fetch(`/api/profile/${address}`);
+        const data = await res.json();
+        if (data.success && data.profile) {
+          setUserRole(data.profile.role);
+          setEmployerReqStatus(data.profile.employerStatus || data.profile.employerRequest?.status || "NONE");
+        }
+      } catch (err) {
+        console.error("Fetch profile role error:", err);
+      } finally {
+        setCheckingRole(false);
+      }
+    }
+    checkRole();
+  }, [address]);
+
+  const handleApplyEmployer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!address || !companyName.trim() || !reqReason.trim()) return;
+
+    setReqSubmitting(true);
+    setReqMessage(null);
+    try {
+      const res = await fetch("/api/employer-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          walletAddress: address,
+          companyName: companyName.trim(),
+          reason: reqReason.trim()
+        })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setReqMessage({ text: data.message, type: "success" });
+        setEmployerReqStatus("PENDING");
+      } else {
+        setReqMessage({ text: data.error || "Không thể gửi yêu cầu.", type: "error" });
+      }
+    } catch (err) {
+      setReqMessage({ text: "Lỗi kết nối máy chủ.", type: "error" });
+    } finally {
+      setReqSubmitting(false);
+    }
+  };
 
   const { register, handleSubmit, formState: { errors }, setValue, watch, reset } = useForm<JobFormData>({
     resolver: zodResolver(jobSchema),
@@ -131,7 +191,7 @@ export default function PostJobPage() {
 
   const onSubmit = async (data: JobFormData) => {
     if (!connected || !address) {
-      setPostError("Vui lòng kết nối ví Web3 trước khi đăng bài tuyển dụng và nạp cọc Escrow.");
+      setPostError("Vui lòng kết nối ví Web3 trước khi đăng bài tuyển dụng.");
       return;
     }
 
@@ -139,19 +199,9 @@ export default function PostJobPage() {
     setPostError("");
 
     try {
-      const tempJobId = `job-${Date.now()}`;
-
-      // 1. Thực hiện Ký quỹ nạp cọc Escrow vào Smart Contract
-      const txHash = await depositEscrowOnChain(
-        provider || "metamask",
-        tempJobId,
-        "0x0000000000000000000000000000000000000000",
-        data.budget.toString()
-      );
-
-      setEscrowTxHash(txHash);
-
-      // 2. Gửi yêu cầu lưu Bài đăng và Hợp đồng cọc vào CSDL
+      // Luồng chuẩn: Post job ở trạng thái OPEN, KHÔNG gọi Smart Contract.
+      // Tiền cọc Escrow sẽ được ký quỹ SAU khi Employer chọn được freelancer
+      // và nhấn "Nạp cọc" trên trang chi tiết job.
       const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -159,46 +209,43 @@ export default function PostJobPage() {
           title: data.title,
           description: data.description,
           category: data.category,
+          subcategory: data.subcategory,
+          experience: data.experience,
           budget: data.budget,
           budgetType: "fixed",
           tokenSymbol: "USDC",
-          clientAddress: address,
+          employerAddress: address,
           skills: data.skills,
           requirements: requirements,
           deliverables: deliverables,
           deadline: data.duration,
-          location: data.type,
-          txHash
+          location: data.type
         })
       });
 
       const resData = await res.json();
       if (!res.ok || !resData.success) {
-        throw new Error(resData.error || "Không thể lưu thông tin bài đăng vào CSDL.");
+        throw new Error(resData.error || "Không thể đăng bài tuyển dụng.");
       }
 
+      const newJobId = resData.job?.id;
       const { addJob, fetchJobs } = useJobStore.getState();
-      const { refreshRealtimeBalance, deductBalance } = useWalletStore.getState();
-
-      // Cập nhật ngay số dư ví trên Header (Realtime)
-      deductBalance(data.budget);
-      refreshRealtimeBalance();
 
       await addJob({
-        id: resData.job?.id || tempJobId,
+        id: newJobId,
         title: data.title,
         description: data.description,
         category: data.category,
         budget: data.budget,
         budgetType: "fixed",
         tokenSymbol: "USDC",
-        clientAddress: address,
+        employerAddress: address,
         skills: data.skills,
         requirements,
         deliverables,
         deadline: data.duration,
         location: data.type,
-        status: "IN_PROGRESS"
+        status: "OPEN"
       } as any);
 
       // Refresh Marketplace state
@@ -209,8 +256,8 @@ export default function PostJobPage() {
       reset();
       setSkills([]);
     } catch (err: any) {
-      console.error("Job submit & Escrow deposit error:", err);
-      setPostError(err?.message || "Không thể nạp cọc Smart Contract Escrow.");
+      console.error("Post job error:", err);
+      setPostError(err?.message || "Không thể đăng bài tuyển dụng.");
       setIsSubmitting(false);
     }
   };
@@ -227,18 +274,13 @@ export default function PostJobPage() {
             <Check className="h-10 w-10 text-white" />
           </div>
           <h1 className="font-display text-3xl font-bold text-white">
-            Đã Nạp Cọc Escrow & Đăng Bài Thành Công!
+            Đã Đăng Bài Tuyển Dụng Thành Công!
           </h1>
           <p className="mt-4 max-w-md mx-auto text-white/70">
-            Tiền cọc dự án đã được khóa an toàn vào Smart Contract Escrow. Bài đăng của bạn đã hiển thị trên thị trường để các Freelancer ứng tuyển.
+            Bài đăng của bạn đã hiển thị trên Marketplace. Khi freelancer ứng tuyển và bạn chọn được người phù hợp,
+            hãy nhấn <strong className="text-violet-300">"Nạp cọc Escrow"</strong> trên trang chi tiết công việc
+            để khóa tiền cọc an toàn vào Smart Contract.
           </p>
-
-          {escrowTxHash && (
-            <div className="mt-6 p-4 rounded-xl border border-violet-500/30 bg-violet-500/10 max-w-lg mx-auto text-xs text-white/80">
-              <span className="text-violet-300 font-semibold block mb-1">Mã Giao Dịch Ký Quỹ (TxHash Escrow):</span>
-              <span className="font-mono text-cyan-300 break-all">{escrowTxHash}</span>
-            </div>
-          )}
 
           <div className="mt-8 flex items-center justify-center gap-4">
             <Link href="/marketplace" className="btn-primary">
@@ -279,12 +321,95 @@ export default function PostJobPage() {
         </motion.div>
       )}
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="glass-card p-8"
-      >
+      {connected && checkingRole && (
+        <div className="glass-card mb-8 p-8 text-center text-white/60">
+          Đang kiểm tra quyền hạn tài khoản ví...
+        </div>
+      )}
+
+      {connected && !checkingRole && userRole !== "EMPLOYER" && userRole !== "ADMIN" && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="glass-card border-violet-500/40 p-8"
+        >
+          <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-3.5 py-1 text-xs font-semibold text-amber-300 mb-4">
+            ⚠️ Yêu cầu Quyền Hạn
+          </div>
+          <h2 className="font-display text-2xl font-bold text-white">
+            Chức Năng Đăng Tuyển Công Việc Dành Cho nhà tuyển dụng 
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-white/70">
+            Tài khoản ví <span className="font-mono text-cyan-300 font-semibold">{address}</span> của bạn chưa đủ điều kiện để đăng bài tuyển dụng. Để đăng bài tuyển dụng, bạn cần gửi đăng ký và được cấp duyệt lên role cao hơn.
+          </p>
+
+          {employerReqStatus === "PENDING" ? (
+            <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6">
+              <div className="flex items-center gap-3 text-amber-300 font-bold text-lg">
+                <span className="flex h-3 w-3 rounded-full bg-amber-400 animate-ping" />
+                Yêu cầu của bạn đang chờ Admin duyệt
+              </div>
+              <p className="mt-2 text-sm text-white/80">
+                Hệ thống đã nhận được đơn đăng ký làm Employer từ địa chỉ ví này. Quản trị viên (Admin) đang xem xét yêu cầu của bạn. Vui lòng quay lại sau!
+              </p>
+            </div>
+          ) : (
+            <form onSubmit={handleApplyEmployer} className="mt-6 space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+              <h3 className="font-semibold text-white text-base">Đăng Ký Quyền Employer (Nhà Tuyển Dụng)</h3>
+
+              {reqMessage && (
+                <div className={`p-4 rounded-xl text-sm font-medium ${reqMessage.type === "success" ? "bg-emerald-500/10 border border-emerald-500/40 text-emerald-300" : "bg-red-500/10 border border-red-500/40 text-red-300"}`}>
+                  {reqMessage.text}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-white/70 uppercase tracking-wider mb-1.5">
+                  Tên Công Ty / Tổ Chức / Dự Án <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Polyflow Labs / Individual Client"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  className="input-field w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-white/70 uppercase tracking-wider mb-1.5">
+                  Mô Tả Nhu Cầu Tuyển Dụng & Dự Án <span className="text-red-400">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="Mô tả ngắn gọn lý do bạn muốn tuyển dụng Freelancer và quy mô dự án của bạn..."
+                  value={reqReason}
+                  onChange={(e) => setReqReason(e.target.value)}
+                  className="input-field w-full"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={reqSubmitting || !companyName.trim() || !reqReason.trim()}
+                className="btn-primary w-full justify-center py-3 text-sm font-semibold disabled:opacity-50"
+              >
+                {reqSubmitting ? "Đang gửi yêu cầu..." : "Gửi Đơn Đăng Ký Employer Cho Admin Phê Duyệt"}
+              </button>
+            </form>
+          )}
+        </motion.div>
+      )}
+
+      {connected && !checkingRole && (userRole === "EMPLOYER" || userRole === "ADMIN") && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="glass-card p-8"
+        >
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
           <div>
             <label className="block text-sm font-medium text-white mb-2">
@@ -565,8 +690,8 @@ export default function PostJobPage() {
           )}
 
           <div className="pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-4">
-            <div className="text-xs text-white/50">
-              * Ngân sách sẽ được ký quỹ cọc an toàn trên Smart Contract Escrow khi đăng bài.
+            <div className="text-xs text-white/50 max-w-md">
+              * Bài đăng sẽ ở trạng thái OPEN. Tiền cọc Escrow sẽ được ký quỹ khi bạn chọn được freelancer phù hợp.
             </div>
 
             <button
@@ -577,15 +702,16 @@ export default function PostJobPage() {
               {isSubmitting ? (
                 <>
                   <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                  Đang nạp cọc Escrow & Đăng bài...
+                  Đang đăng bài...
                 </>
               ) : (
-                "Nạp Cọc Escrow & Đăng Bài"
+                "Đăng Bài Tuyển Dụng"
               )}
             </button>
           </div>
         </form>
       </motion.div>
+      )}
     </div>
   );
 }

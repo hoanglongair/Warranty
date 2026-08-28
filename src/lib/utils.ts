@@ -13,15 +13,26 @@ export function formatCurrency(amount: number, currency = "USD"): string {
   }).format(amount);
 }
 
-export function formatCompactNumber(num: number): string {
+export function formatCompactNumber(num: number): string | undefined {
+  if (num === undefined) return undefined;
   if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
   if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
-  return num.toString();
+  return num.toFixed(1);
 }
 
 export function formatAddress(address: string, chars = 4): string {
   if (!address) return "";
   return `${address.slice(0, chars + 2)}...${address.slice(-chars)}`;
+}
+
+export function formatDateSafe(dateInput: string | number | Date): string {
+  try {
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return "";
+    return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${d.getUTCFullYear()}`;
+  } catch {
+    return "";
+  }
 }
 
 export function timeAgo(date: string): string {

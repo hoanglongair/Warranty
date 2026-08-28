@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getAuthSession, verifyOwnership } from "@/lib/auth-guard";
 
 export async function GET(
   req: NextRequest,
@@ -9,7 +10,7 @@ export async function GET(
     const { walletAddress } = await params;
     const address = walletAddress.toLowerCase();
 
-    // Tự động tạo bản ghi User mới vào Neon DB nếu chưa tồn tại
+    // Tự động tạo bản ghi User mới vào CSDL nếu chưa tồn tại
     const user = await prisma.user.upsert({
       where: { walletAddress: address },
       update: {},
@@ -19,7 +20,7 @@ export async function GET(
         avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${address}`,
         bio: "Web3 Ecosystem Member & Freelancer",
         skills: ["Web3", "Smart Contracts"],
-        role: "BOTH",
+        role: "FREELANCER",
         rating: 5.0
       },
       include: {
@@ -29,7 +30,8 @@ export async function GET(
         applications: {
           include: { job: true },
           orderBy: { createdAt: "desc" }
-        }
+        },
+        employerRequest: true
       }
     });
 
@@ -47,8 +49,20 @@ export async function PUT(
   try {
     const { walletAddress } = await params;
     const address = walletAddress.toLowerCase();
+
+    // Enforce JWT Session & Ownership Verification
+    const session = await getAuthSession(req);
+    if (!session) {
+      return NextResponse.json({ error: "Vui lòng đăng nhập ví để cập nhật hồ sơ cá nhân." }, { status: 401 });
+    }
+
+    const ownershipCheck = verifyOwnership(session, address);
+    if (!ownershipCheck.isOwner && ownershipCheck.errorResponse) {
+      return ownershipCheck.errorResponse;
+    }
+
     const body = await req.json();
-    const { name, avatar, bio, skills, role, email } = body;
+    const { name, avatar, bio, skills, email } = body;
 
     const updatedUser = await prisma.user.upsert({
       where: { walletAddress: address },
@@ -57,8 +71,7 @@ export async function PUT(
         ...(avatar && { avatar }),
         ...(bio && { bio }),
         ...(skills && { skills: Array.isArray(skills) ? skills : [] }),
-        ...(role && { role }),
-        ...(email && { email })
+        ...(email !== undefined && { email })
       },
       create: {
         walletAddress: address,
@@ -66,8 +79,11 @@ export async function PUT(
         avatar: avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${address}`,
         bio: bio || "",
         skills: Array.isArray(skills) ? skills : [],
-        role: role || "BOTH",
+        role: "FREELANCER",
         email: email || null
+      },
+      include: {
+        employerRequest: true
       }
     });
 

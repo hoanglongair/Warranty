@@ -11,20 +11,9 @@ const footerLinks = [
     key: "product",
     labelKey: "footer.product",
     links: [
-      { key: "categories", labelKey: "footer.categories", href: "/categories" },
       { key: "marketplace", labelKey: "footer.marketplace", href: "/marketplace" },
       { key: "postJob", labelKey: "footer.postJob", href: "/post-job" },
       { key: "findWork", labelKey: "footer.findWork", href: "/marketplace?tab=freelancers" }
-    ]
-  },
-  {
-    key: "account",
-    labelKey: "footer.account",
-    links: [
-      { key: "dashboard", labelKey: "footer.dashboard", href: "/dashboard" },
-      { key: "profile", labelKey: "footer.profile", href: "/profile" },
-      { key: "wallet", labelKey: "footer.wallet", href: "/wallet" },
-      { key: "settings", labelKey: "footer.settings", href: "/settings" }
     ]
   },
   {

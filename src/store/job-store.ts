@@ -19,7 +19,7 @@ interface JobStore {
 
 export const useJobStore = create<JobStore>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       jobs: [],
       isLoading: false,
       bookmarkedJobs: [],

@@ -1,13 +1,26 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
-import { freelancers } from "@/data/freelancers";
 import { FreelancerCard } from "@/components/marketplace/freelancer-card";
 
 export function FeaturedFreelancers() {
-  const featuredFreelancers = freelancers.slice(0, 6);
+  const [freelancersList, setFreelancersList] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("/api/freelancers")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.freelancers) {
+          setFreelancersList(data.freelancers.slice(0, 6));
+        }
+      })
+      .catch((err) => console.error("Featured freelancers error:", err));
+  }, []);
+
+  const featuredFreelancers = freelancersList;
 
   return (
     <section className="relative py-24">

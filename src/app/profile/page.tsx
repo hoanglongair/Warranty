@@ -3,10 +3,9 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { 
-  MapPin, Calendar, Star, Briefcase, DollarSign, Clock, 
-  CheckCircle2, ExternalLink, Edit2, Plus, Globe, Twitter, Github, Save, X
+  CheckCircle2, Edit2, Plus, Save, X
 } from "lucide-react";
-import { formatCurrency, formatCompactNumber } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { useWalletStore } from "@/store/wallet-store";
 
@@ -104,9 +103,25 @@ export default function ProfilePage() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <h1 className="font-display text-3xl font-bold text-white">{displayName}</h1>
                       <CheckCircle2 className="h-6 w-6 text-violet-400" />
+                      
+                      {profile?.role === "ADMIN" && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-bold text-purple-300">
+                          🛡️ Admin System
+                        </span>
+                      )}
+                      {profile?.role === "EMPLOYER" && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-bold text-cyan-300">
+                          🏢 Employer (Đã duyệt)
+                        </span>
+                      )}
+                      {(profile?.role === "FREELANCER" || !profile?.role) && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/40 bg-violet-500/10 px-3 py-1 text-xs font-bold text-violet-300">
+                          💻 Freelancer
+                        </span>
+                      )}
                     </div>
                     <p className="mt-1 text-sm text-white/70 max-w-2xl">{displayBio}</p>
                   </>

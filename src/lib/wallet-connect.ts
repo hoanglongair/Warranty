@@ -1,4 +1,4 @@
-import { ARC_CHAIN_ID_DECIMAL, ARC_CHAIN_ID_HEX } from "@/config/tokens";
+import { ARC_CHAIN_ID_HEX } from "@/config/tokens";
 import { arcTestnetParams } from "@/config/chains";
 import type { WalletProvider } from "@/types";
 
@@ -23,20 +23,17 @@ export interface EthereumProvider {
   removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
 }
 
-function walletFlag(id: WalletProvider): keyof EthereumProvider | null {
-  const map: Record<WalletProvider, keyof EthereumProvider | null> = {
-    metamask: "isMetaMask",
-    coinbase: "isCoinbaseWallet",
-    okx: "isOKXWallet",
-    trust: "isTrust",
-    phantom: "isPhantom",
-    binance: "isBinanceW3W",
-    walletconnect: null
-  };
-  return map[id];
+export interface EthereumProvider {
+  ethereum?: EthereumProvider;
+  okxwallet?: EthereumProvider;
+  coinbaseWalletExtension?: EthereumProvider;
+  trustwallet?: EthereumProvider;
+  phantom?: { ethereum?: EthereumProvider };
+  binancew3w?: EthereumProvider;
+  binance?: EthereumProvider;
 }
 
-interface CustomWindow {
+export interface WalletWindow {
   ethereum?: EthereumProvider;
   okxwallet?: EthereumProvider;
   coinbaseWalletExtension?: EthereumProvider;
@@ -117,7 +114,7 @@ if (typeof window !== "undefined") {
 export function getProvider(id: WalletProvider): EthereumProvider | null {
   if (typeof window === "undefined") return null;
 
-  const w = window as unknown as CustomWindow;
+  const w = window as unknown as WalletWindow;
 
   // 1. Dedicated window objects first (OKX Wallet has dedicated window.okxwallet)
   if (id === "okx" && w.okxwallet && typeof w.okxwallet.request === "function") {

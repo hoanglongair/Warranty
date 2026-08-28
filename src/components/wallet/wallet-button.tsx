@@ -15,6 +15,7 @@ import {
   watchWallet
 } from "@/lib/wallet-connect";
 import Link from "next/link";
+import Image from "next/image";
 
 const ARC_CHAIN_ID = 5042002;
 
@@ -25,6 +26,7 @@ export function WalletButton() {
   const [refreshing, setRefreshing] = useState(false);
   const {
     connected,
+    authenticated,
     address,
     ensName,
     balance,
@@ -39,11 +41,11 @@ export function WalletButton() {
   const isArcTestnet = chainId === ARC_CHAIN_ID;
 
   useEffect(() => {
-    if (connected && address) {
-      // Tự động gọi API khởi tạo/đồng bộ bản ghi User trong CSDL Neon khi ví kết nối
+    if (connected && authenticated && address) {
+      // Tự động gọi API khởi tạo/đồng bộ bản ghi User trong CSDL Neon khi ví đã xác thực
       fetch(`/api/profile/${address}`).catch((err) => console.error("Auto sync profile error:", err));
     }
-  }, [connected, address]);
+  }, [connected, authenticated, address]);
 
   useEffect(() => {
     if (!connected || !realConnection || !provider) return;
@@ -66,7 +68,7 @@ export function WalletButton() {
         const chainHex = await getChainId(provider);
         if (cancelled) return;
         setChainId(parseInt(chainHex, 16));
-        
+
         await fetchLatestBalance();
 
         // Polling tự động mỗi 4 giây để cập nhật số dư thời gian thực (Real-time)
@@ -97,20 +99,20 @@ export function WalletButton() {
     return () => {
       cancelled = true;
       if (intervalId) clearInterval(intervalId);
-      unsub?.();
+      if (unsub) unsub();
     };
   }, [connected, realConnection, provider, address, setBalance, setChainId, setError, disconnect]);
 
   const handleRefresh = async () => {
-    if (!provider || !address) return;
+    if (!address || !provider) return;
     setRefreshing(true);
     try {
       const wei = await getBalance(provider, address);
       setBalance(formatBalanceWeiToEth(wei));
     } catch {
-      // ignore
+      // silent
     } finally {
-      setTimeout(() => setRefreshing(false), 400);
+      setTimeout(() => setRefreshing(false), 500);
     }
   };
 
@@ -160,7 +162,7 @@ export function WalletButton() {
       >
         <div className="relative">
           <div className="h-7 w-7 rounded-full overflow-hidden flex items-center justify-center bg-white p-0.5">
-            <img src="/arc-logo.png" alt="Arc" className="object-contain w-full h-full" />
+            <Image src="/arc-logo.png" alt="Arc" width={28} height={28} className="object-contain w-full h-full" />
           </div>
           <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[hsl(var(--background))] bg-green-500" />
         </div>
@@ -232,14 +234,7 @@ export function WalletButton() {
 
               <div className="my-1 h-px bg-white/5" />
 
-              <Link
-                href="/wallet"
-                onClick={() => setOpen(false)}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:bg-white/5 hover:text-white"
-              >
-                <Wallet className="h-4 w-4" />
-                <span>Wallet Dashboard</span>
-              </Link>
+
 
               <Link
                 href="/settings"

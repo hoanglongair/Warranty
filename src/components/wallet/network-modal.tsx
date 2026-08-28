@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Check, Globe, RefreshCcw, Sparkles, AlertCircle } from "lucide-react";
+import { X, Globe, RefreshCcw, Sparkles, AlertCircle } from "lucide-react";
 import { SUPPORTED_NETWORKS, ChainConfig } from "@/config/chains";
 import { useWalletStore } from "@/store/wallet-store";
 import { switchNetwork, getChainId, getBalance, formatBalanceWeiToEth } from "@/lib/wallet-connect";
