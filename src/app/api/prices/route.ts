@@ -48,11 +48,17 @@ export async function GET() {
     const prices: Record<string, { price: number; change24h: number }> = {};
 
     for (const [id, info] of Object.entries(data)) {
-      const coinInfo = info as { usd: number; usd_24h_change?: number };
+      const coinInfo = info as { usd?: number; usd_24h_change?: number };
+      // Bỏ qua entry không có giá hợp lệ (vd khi CoinGecko trả object lỗi)
+      if (typeof coinInfo?.usd !== "number" || !Number.isFinite(coinInfo.usd)) continue;
       prices[id] = {
         price: coinInfo.usd,
-        change24h: coinInfo.usd_24h_change ?? 0,
+        change24h: typeof coinInfo.usd_24h_change === "number" ? coinInfo.usd_24h_change : 0,
       };
+    }
+
+    if (Object.keys(prices).length === 0) {
+      throw new Error("CoinGecko trả về dữ liệu giá rỗng/không hợp lệ");
     }
 
     // Update cache

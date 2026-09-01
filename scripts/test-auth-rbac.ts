@@ -2,7 +2,8 @@ import "dotenv/config";
 import jwt from "jsonwebtoken";
 
 const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:3000";
-const JWT_SECRET = process.env.JWT_SECRET || "warranty_super_secret_jwt_key_2026_change_me";
+// Phải khớp default trong src/lib/auth-guard.ts (getJwtSecret) khi JWT_SECRET không được set
+const JWT_SECRET = process.env.JWT_SECRET || "warranty_super_secret_jwt_key_2026_dev_only";
 
 function generateTestToken(walletAddress: string, role: string): string {
   return jwt.sign(

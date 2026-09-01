@@ -72,7 +72,8 @@ export async function PATCH(req: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `Đã phê duyệt thành công role EMPLOYER cho địa chỉ ví ${targetAddress}`
+        requiresRelogin: true,
+        message: `Đã phê duyệt thành công role EMPLOYER cho địa chỉ ví ${targetAddress}. Người dùng cần đăng nhập lại để làm mới phiên.`
       });
     } else if (action === "REJECT") {
       await prisma.employerRequest.update({

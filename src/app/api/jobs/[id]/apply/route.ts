@@ -42,6 +42,13 @@ export async function POST(
       );
     }
 
+    if (job.status !== "OPEN") {
+      return NextResponse.json(
+        { error: `Dự án này không còn nhận đơn ứng tuyển (trạng thái: ${job.status}).` },
+        { status: 400 }
+      );
+    }
+
     // 2. Check duplicate application
     const existingApp = await prisma.application.findFirst({
       where: {
@@ -68,15 +75,31 @@ export async function POST(
       }
     });
 
-    const application = await prisma.application.create({
-      data: {
-        jobId,
-        freelancerAddress: walletAddress,
-        proposalBid: Number(proposalBid),
-        coverLetter,
-        estimatedDays: Number(estimatedDays || 7)
+    let application;
+    try {
+      application = await prisma.application.create({
+        data: {
+          jobId,
+          freelancerAddress: walletAddress,
+          proposalBid: Number(proposalBid),
+          coverLetter,
+          estimatedDays: Number(estimatedDays || 7)
+        }
+      });
+    } catch (createErr: unknown) {
+      // P2002 = unique constraint (jobId, freelancerAddress) — chống race double-apply
+      if (
+        typeof createErr === "object" &&
+        createErr !== null &&
+        (createErr as { code?: string }).code === "P2002"
+      ) {
+        return NextResponse.json(
+          { error: "Bạn đã gửi ứng tuyển cho dự án này rồi. Không thể gửi trùng lặp." },
+          { status: 400 }
+        );
       }
-    });
+      throw createErr;
+    }
 
     return NextResponse.json({ success: true, application });
   } catch (error) {

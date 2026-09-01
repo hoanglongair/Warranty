@@ -126,11 +126,18 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const targetWallet = searchParams.get("walletAddress") || session.walletAddress;
+    const requested = searchParams.get("walletAddress")?.toLowerCase();
+    const isAdmin = session.role.toUpperCase() === "ADMIN";
+
+    // Chỉ ADMIN mới được truy vấn yêu cầu của ví khác
+    const targetWallet =
+      requested && (isAdmin || requested === session.walletAddress.toLowerCase())
+        ? requested
+        : session.walletAddress.toLowerCase();
 
     const request = await prisma.employerRequest.findUnique({
-      where: { walletAddress: targetWallet.toLowerCase() },
-      include: { user: true }
+      where: { walletAddress: targetWallet },
+      include: isAdmin ? { user: true } : undefined
     });
 
     return NextResponse.json({ success: true, request });

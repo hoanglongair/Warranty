@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { Role } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 
 export function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -35,9 +36,23 @@ export async function getAuthSession(req: NextRequest): Promise<AuthSession | nu
       try {
         const decoded = jwt.verify(token, JWT_SECRET) as { walletAddress: string; role: string };
         if (decoded && decoded.walletAddress) {
+          const walletAddress = decoded.walletAddress.toLowerCase();
+
+          // Luôn lấy role hiện tại từ DB — KHÔNG tin role nhúng trong JWT.
+          // Điều này giúp thay đổi quyền (thăng/giáng cấp) có hiệu lực ngay,
+          // thay vì phải chờ token hết hạn.
+          const dbUser = await prisma.user.findUnique({
+            where: { walletAddress },
+            select: { role: true }
+          });
+
+          if (!dbUser) {
+            return null;
+          }
+
           return {
-            walletAddress: decoded.walletAddress.toLowerCase(),
-            role: decoded.role
+            walletAddress,
+            role: dbUser.role
           };
         }
       } catch (jwtErr) {

@@ -82,6 +82,15 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
         (job.employer?.walletAddress && job.employer.walletAddress.toLowerCase() === address.toLowerCase()))
   );
 
+  // Chỉ cho ứng tuyển khi job đang mở (chưa hire / chưa hoàn thành / chưa hủy)
+  const jobStatus = (job.status || "OPEN").toString().toUpperCase();
+  const isOpenForApply = jobStatus === "OPEN";
+  const jobStatusLabel: Record<string, string> = {
+    IN_PROGRESS: "Dự án đã tuyển được freelancer và đang thực hiện.",
+    COMPLETED: "Dự án đã hoàn thành và giải ngân. Không còn nhận ứng tuyển.",
+    CANCELLED: "Dự án đã bị hủy. Không còn nhận ứng tuyển."
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="mb-8">
@@ -252,6 +261,10 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-center text-xs text-amber-200">
                   Bạn là chủ bài đăng dự án này.
                 </div>
+              ) : !isOpenForApply ? (
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-center text-xs text-white/60">
+                  {jobStatusLabel[jobStatus] || "Dự án hiện không nhận ứng tuyển."}
+                </div>
               ) : (
                 <a href="#proposal-form" className="btn-primary w-full text-center block">
                   Apply Now
@@ -329,7 +342,7 @@ export function JobDetailsClient({ id: jobId }: JobDetailsClientProps) {
             )}
           </motion.div>
 
-          {!isEmployer ? (
+          {!isEmployer && isOpenForApply ? (
             <motion.div
               id="proposal-form"
               initial={{ opacity: 0, y: 20 }}

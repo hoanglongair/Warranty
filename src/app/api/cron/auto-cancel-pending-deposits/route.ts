@@ -21,25 +21,23 @@ import { prisma } from "@/lib/prisma";
  */
 export async function POST(req: NextRequest) {
   try {
-    // Mandatory secret verification
+    // Mandatory secret verification — luôn bắt buộc, kể cả môi trường dev
     const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret && process.env.NODE_ENV === "production") {
+    if (!cronSecret) {
       return NextResponse.json(
         { error: "LỖI BẢO MẬT: Biến môi trường CRON_SECRET chưa được cấu hình trên server." },
         { status: 500 }
       );
     }
 
-    if (cronSecret) {
-      const providedHeader = req.headers.get("x-cron-secret");
-      const authHeader = req.headers.get("authorization");
-      const providedToken = providedHeader || (authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null);
-      if (providedToken !== cronSecret) {
-        return NextResponse.json(
-          { error: "Unauthorized: Mã xác thực Cron Secret không hợp lệ." },
-          { status: 401 }
-        );
-      }
+    const providedHeader = req.headers.get("x-cron-secret");
+    const authHeader = req.headers.get("authorization");
+    const providedToken = providedHeader || (authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null);
+    if (providedToken !== cronSecret) {
+      return NextResponse.json(
+        { error: "Unauthorized: Mã xác thực Cron Secret không hợp lệ." },
+        { status: 401 }
+      );
     }
 
     const now = new Date();
@@ -111,7 +109,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Cho phép GET để dễ test thủ công trên browser
+// GET cũng yêu cầu CRON_SECRET (một số cron service chỉ gửi GET)
 export async function GET(req: NextRequest) {
   return POST(req);
 }

@@ -1,12 +1,24 @@
 import { ethers } from "ethers";
 import { WARRANTY_ESCROW_ABI, WARRANTY_ESCROW_ADDRESS, WARRANTY_ESCROW_RPC_URL } from "./escrow-contract";
 
+const iface = new ethers.Interface(WARRANTY_ESCROW_ABI);
+
 /**
- * Verify rằng một transaction hash đã thực sự được mined thành công trên blockchain.
- * Trả về { success, status, blockNumber, from, to, error? }.
+ * Verify rằng một transaction hash đã thực sự được mined thành công trên blockchain
+ * VÀ là một giao dịch tới đúng contract Escrow.
+ *
+ * @param txHash hash giao dịch
+ * @param opts.expectedEvent tên event bắt buộc phải xuất hiện trong logs (vd "PaymentReleased")
+ * @param opts.expectedJobId nếu có, kiểm tra event có đúng bytes32(jobId)
+ * @param opts.expectedFrom nếu có, kiểm tra người gửi giao dịch
  */
 export async function verifyEscrowTxOnChain(
-  txHash: string
+  txHash: string,
+  opts?: {
+    expectedEvent?: string;
+    expectedJobId?: string;
+    expectedFrom?: string;
+  }
 ): Promise<{
   success: boolean;
   status: number | null;
@@ -15,19 +27,21 @@ export async function verifyEscrowTxOnChain(
   to: string | null;
   error?: string;
 }> {
+  const fail = (error: string) => ({
+    success: false,
+    status: null,
+    blockNumber: null,
+    from: null,
+    to: null,
+    error,
+  });
+
   if (!txHash || !txHash.startsWith("0x") || txHash.length !== 66) {
-    return { success: false, status: null, blockNumber: null, from: null, to: null, error: "Invalid tx hash" };
+    return fail("Invalid tx hash");
   }
 
   if (!WARRANTY_ESCROW_ADDRESS) {
-    return {
-      success: false,
-      status: null,
-      blockNumber: null,
-      from: null,
-      to: null,
-      error: "Smart Contract Escrow chưa được cấu hình (NEXT_PUBLIC_ESCROW_CONTRACT_ADDRESS)",
-    };
+    return fail("Smart Contract Escrow chưa được cấu hình (NEXT_PUBLIC_ESCROW_CONTRACT_ADDRESS)");
   }
 
   try {
@@ -35,14 +49,7 @@ export async function verifyEscrowTxOnChain(
     const receipt = await provider.getTransactionReceipt(txHash);
 
     if (!receipt) {
-      return {
-        success: false,
-        status: null,
-        blockNumber: null,
-        from: null,
-        to: null,
-        error: "Transaction not found or not yet mined",
-      };
+      return fail("Transaction not found or not yet mined");
     }
 
     if (receipt.status !== 1) {
@@ -56,6 +63,62 @@ export async function verifyEscrowTxOnChain(
       };
     }
 
+    // Giao dịch phải tương tác với đúng contract Escrow
+    if (!receipt.to || receipt.to.toLowerCase() !== WARRANTY_ESCROW_ADDRESS.toLowerCase()) {
+      return {
+        success: false,
+        status: receipt.status,
+        blockNumber: receipt.blockNumber,
+        from: receipt.from,
+        to: receipt.to,
+        error: "Giao dịch không gửi tới contract Escrow của hệ thống",
+      };
+    }
+
+    if (opts?.expectedFrom && receipt.from.toLowerCase() !== opts.expectedFrom.toLowerCase()) {
+      return {
+        success: false,
+        status: receipt.status,
+        blockNumber: receipt.blockNumber,
+        from: receipt.from,
+        to: receipt.to,
+        error: "Người gửi giao dịch không khớp",
+      };
+    }
+
+    if (opts?.expectedEvent) {
+      const wantJobId = opts.expectedJobId ? ethers.id(opts.expectedJobId) : null;
+      let matched = false;
+
+      for (const log of receipt.logs) {
+        if (log.address.toLowerCase() !== WARRANTY_ESCROW_ADDRESS.toLowerCase()) continue;
+        let parsed;
+        try {
+          parsed = iface.parseLog({ topics: [...log.topics], data: log.data });
+        } catch {
+          continue;
+        }
+        if (!parsed || parsed.name !== opts.expectedEvent) continue;
+        if (wantJobId) {
+          const evJobId = (parsed.args.jobId ?? "").toString().toLowerCase();
+          if (evJobId !== wantJobId.toLowerCase()) continue;
+        }
+        matched = true;
+        break;
+      }
+
+      if (!matched) {
+        return {
+          success: false,
+          status: receipt.status,
+          blockNumber: receipt.blockNumber,
+          from: receipt.from,
+          to: receipt.to,
+          error: `Không tìm thấy sự kiện ${opts.expectedEvent} hợp lệ trong giao dịch`,
+        };
+      }
+    }
+
     return {
       success: true,
       status: receipt.status,
@@ -63,20 +126,13 @@ export async function verifyEscrowTxOnChain(
       from: receipt.from,
       to: receipt.to,
     };
-  } catch (err: any) {
-    return {
-      success: false,
-      status: null,
-      blockNumber: null,
-      from: null,
-      to: null,
-      error: err?.message || "Failed to verify transaction",
-    };
+  } catch (err: unknown) {
+    return fail(err instanceof Error ? err.message : "Failed to verify transaction");
   }
 }
 
 /**
- * Verify escrow đã thực sự FUNDED trên smart contract.
+ * Verify trạng thái escrow on-chain bằng cách đọc trực tiếp `escrows(jobId)`.
  */
 export async function verifyEscrowStateOnChain(
   jobId: string,
@@ -84,6 +140,7 @@ export async function verifyEscrowStateOnChain(
   expectedAmount?: bigint
 ): Promise<{
   funded: boolean;
+  completed: boolean;
   exists: boolean;
   status?: number;
   employer?: string;
@@ -92,7 +149,7 @@ export async function verifyEscrowStateOnChain(
   error?: string;
 }> {
   if (!WARRANTY_ESCROW_ADDRESS) {
-    return { funded: false, exists: false, error: "Smart Contract Escrow chưa được cấu hình" };
+    return { funded: false, completed: false, exists: false, error: "Smart Contract Escrow chưa được cấu hình" };
   }
 
   try {
@@ -102,47 +159,54 @@ export async function verifyEscrowStateOnChain(
 
     const escrow = await contract.escrows(bytes32JobId);
 
-    const exists = escrow.amount > 0n;
-    const funded = escrow.status === 1; // FUNDED = 1
+    const amount = BigInt(escrow.amount);
+    const statusNum = Number(escrow.status);
+    const exists = amount > 0n;
+    const funded = statusNum === 1; // FUNDED = 1
+    const completed = statusNum === 2; // COMPLETED = 2
 
     if (!exists) {
-      return { funded: false, exists: false, error: "Escrow does not exist" };
+      return { funded: false, completed: false, exists: false, error: "Escrow does not exist" };
     }
 
     if (escrow.employer.toLowerCase() !== expectedEmployer.toLowerCase()) {
       return {
         funded,
+        completed,
         exists,
-        status: Number(escrow.status),
+        status: statusNum,
         employer: escrow.employer,
         error: "Employer address mismatch",
       };
     }
 
-    if (expectedAmount !== undefined && escrow.amount < expectedAmount) {
+    if (expectedAmount !== undefined && amount < expectedAmount) {
       return {
         funded,
+        completed,
         exists,
-        status: Number(escrow.status),
+        status: statusNum,
         employer: escrow.employer,
-        amount: escrow.amount,
-        error: `Escrow amount ${escrow.amount} < expected ${expectedAmount}`,
+        amount,
+        error: `Escrow amount ${amount} < expected ${expectedAmount}`,
       };
     }
 
     return {
       funded,
+      completed,
       exists,
-      status: Number(escrow.status),
+      status: statusNum,
       employer: escrow.employer,
       freelancer: escrow.freelancer,
-      amount: escrow.amount,
+      amount,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     return {
       funded: false,
+      completed: false,
       exists: false,
-      error: err?.message || "Failed to query escrow state",
+      error: err instanceof Error ? err.message : "Failed to query escrow state",
     };
   }
 }

@@ -5,6 +5,64 @@ import { ethers } from "ethers";
 import { prisma } from "@/lib/prisma";
 import { getJwtSecret } from "@/lib/auth-guard";
 
+// Chữ ký SIWE chỉ hợp lệ trong khoảng thời gian này kể từ "Issued At"
+const SIWE_MAX_AGE_MS = 10 * 60 * 1000; // 10 phút
+
+/**
+ * Xác thực thủ công thông điệp SIWE hand-built (parser strict của `siwe` v3 từ chối
+ * định dạng này). Vẫn siết đủ ràng buộc bảo mật: khôi phục địa chỉ từ chữ ký,
+ * khớp domain + URI với host của request, khớp nonce, và kiểm tra độ tươi.
+ */
+function verifySiweManually(
+  message: string,
+  signature: string,
+  nonce: string,
+  expectedHost: string
+): { ok: true; address: string } | { ok: false; error: string } {
+  let recovered: string;
+  try {
+    recovered = ethers.verifyMessage(message, signature);
+  } catch {
+    return { ok: false, error: "Chữ ký ví không hợp lệ." };
+  }
+
+  const lines = message.split("\n");
+
+  // Dòng 1: "<domain> wants you to sign in with your Ethereum account:"
+  const domainMatch = lines[0]?.match(/^(\S+) wants you to sign in with your Ethereum account:$/);
+  if (!domainMatch) {
+    return { ok: false, error: "Thông điệp SIWE sai định dạng dòng mở đầu." };
+  }
+  if (domainMatch[1].toLowerCase() !== expectedHost.toLowerCase()) {
+    return { ok: false, error: "Domain trong thông điệp không khớp với máy chủ." };
+  }
+
+  // URI phải cùng host
+  const uriLine = lines.find((l) => l.startsWith("URI: "));
+  try {
+    const uriHost = new URL(uriLine!.slice(5).trim()).host;
+    if (uriHost.toLowerCase() !== expectedHost.toLowerCase()) {
+      return { ok: false, error: "URI trong thông điệp không khớp với máy chủ." };
+    }
+  } catch {
+    return { ok: false, error: "URI trong thông điệp SIWE không hợp lệ." };
+  }
+
+  // Nonce phải khớp cookie (single-use, chống replay)
+  if (!lines.some((l) => l.trim() === `Nonce: ${nonce}`)) {
+    return { ok: false, error: "Mã nonce trong chữ ký không khớp phiên làm việc." };
+  }
+
+  // Độ tươi: Issued At trong vòng SIWE_MAX_AGE_MS
+  const issuedLine = lines.find((l) => l.startsWith("Issued At: "));
+  const issuedAt = issuedLine ? Date.parse(issuedLine.slice(11).trim()) : NaN;
+  if (Number.isNaN(issuedAt) || Math.abs(Date.now() - issuedAt) > SIWE_MAX_AGE_MS) {
+    return { ok: false, error: "Chữ ký đăng nhập đã hết hạn. Vui lòng thử lại." };
+  }
+
+  return { ok: true, address: recovered.toLowerCase() };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { message, signature } = await req.json();
@@ -24,28 +82,36 @@ export async function POST(req: NextRequest) {
 
     let walletAddress: string = "";
 
-    // 2. Xác thực bằng chuẩn SIWE (EIP-4361)
+    // Domain hợp lệ = host của chính request này (chống chấp nhận chữ ký ký cho domain phishing khác)
+    const expectedHost = req.headers.get("host") || new URL(req.url).host;
+
+    // 2. Ưu tiên xác thực bằng thư viện `siwe` chuẩn EIP-4361;
+    //    nếu parser strict từ chối định dạng (thông điệp hand-built) thì xác thực thủ công có siết ràng buộc.
+    let siweParsed = false;
     try {
       const siweMessage = new SiweMessage(message);
-      const verifyResult = await siweMessage.verify({ signature, nonce: nonceCookie });
+      siweParsed = true;
+      const verifyResult = await siweMessage.verify({
+        signature,
+        nonce: nonceCookie,
+        domain: expectedHost
+      });
       if (!verifyResult.success) {
         const errDetail = verifyResult.error ? String(verifyResult.error.type || verifyResult.error) : "Chữ ký SIWE không hợp lệ hoặc mã nonce không khớp.";
-        return NextResponse.json(
-          { error: `Xác thực SIWE thất bại: ${errDetail}` },
-          { status: 401 }
-        );
+        return NextResponse.json({ error: `Xác thực SIWE thất bại: ${errDetail}` }, { status: 401 });
       }
       walletAddress = siweMessage.address.toLowerCase();
-    } catch {
-      // Fallback: Phục hồi địa chỉ bằng ethers và kiểm tra nonce thủ công
-      const recoveredAddress = ethers.verifyMessage(message, signature);
-      if (!recoveredAddress) {
-        return NextResponse.json({ error: "Chữ ký ví không hợp lệ." }, { status: 401 });
+    } catch (siweErr) {
+      if (siweParsed) {
+        // Parse được nhưng verify ném lỗi → coi là chữ ký không hợp lệ
+        console.warn("[SIWE] verify threw:", siweErr instanceof Error ? siweErr.message : String(siweErr));
+        return NextResponse.json({ error: "Chữ ký SIWE không hợp lệ." }, { status: 401 });
       }
-      if (!message.includes(`Nonce: ${nonceCookie}`)) {
-        return NextResponse.json({ error: "Mã khởi tạo (nonce) trong chữ ký không khớp với phiên làm việc." }, { status: 401 });
+      const manual = verifySiweManually(message, signature, nonceCookie, expectedHost);
+      if (!manual.ok) {
+        return NextResponse.json({ error: manual.error }, { status: 401 });
       }
-      walletAddress = recoveredAddress.toLowerCase();
+      walletAddress = manual.address;
     }
 
     // Upsert User vào Database (nếu chưa có thì tạo mới)
@@ -60,14 +126,17 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    // Tạo JWT Token
+    // Tạo JWT Token.
+    // Lưu ý: `role` chỉ mang tính tham khảo cho client — server luôn xác thực
+    // role theo DB ở mỗi request (xem getAuthSession). TTL ngắn để giảm cửa sổ
+    // rủi ro nếu token bị lộ.
     const token = jwt.sign(
       {
         walletAddress: user.walletAddress,
         role: user.role
       },
       getJwtSecret(),
-      { expiresIn: "7d" }
+      { expiresIn: "24h" }
     );
 
     const response = NextResponse.json({
@@ -80,7 +149,7 @@ export async function POST(req: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60, // 7 ngày
+      maxAge: 24 * 60 * 60, // 24 giờ (khớp TTL của JWT)
       path: "/"
     });
 
@@ -95,10 +164,9 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error: unknown) {
-    const errMessage = error instanceof Error ? error.message : String(error);
     console.error("SIWE Verify Server Error Detail:", error);
     return NextResponse.json(
-      { error: `Lỗi xác thực chữ ký ví Web3: ${errMessage}` },
+      { error: "Lỗi hệ thống khi xác thực chữ ký ví Web3. Vui lòng thử lại." },
       { status: 500 }
     );
   }

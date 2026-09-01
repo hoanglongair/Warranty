@@ -7,11 +7,19 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
     const search = searchParams.get("search");
+    const status = (searchParams.get("status") || "OPEN").toUpperCase();
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
     const skip = (page - 1) * limit;
 
     const whereClause: Record<string, unknown> = {};
+
+    // Mặc định marketplace chỉ hiển thị job đang mở tuyển; truyền ?status=all để lấy hết
+    if (status !== "ALL") {
+      whereClause.status = ["OPEN", "IN_PROGRESS", "COMPLETED", "CANCELLED"].includes(status)
+        ? status
+        : "OPEN";
+    }
 
     if (category && category.toLowerCase() !== "all") {
       whereClause.category = { equals: category, mode: "insensitive" };
@@ -94,14 +102,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { title, description, category, budget, budgetType, tokenSymbol, skills, requirements, deliverables, deadline, location } = body;
 
-    // Debug: check cookies
-    const cookies = req.cookies.getAll();
-    console.log("[POST /api/jobs] Cookies:", cookies.map(c => c.name).join(", "));
-    const warrantyToken = req.cookies.get("warranty_token")?.value;
-    console.log("[POST /api/jobs] warranty_token:", warrantyToken ? "EXISTS (" + warrantyToken.substring(0, 20) + "...)" : "MISSING");
-
     const session = await getAuthSession(req);
-    console.log("[POST /api/jobs] Session:", session ? "OK" : "NULL");
     if (!session) {
       return NextResponse.json({ error: "Vui lòng đăng nhập để đăng bài tuyển dụng." }, { status: 401 });
     }

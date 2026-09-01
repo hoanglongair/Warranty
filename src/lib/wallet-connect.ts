@@ -23,16 +23,6 @@ export interface EthereumProvider {
   removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
 }
 
-export interface EthereumProvider {
-  ethereum?: EthereumProvider;
-  okxwallet?: EthereumProvider;
-  coinbaseWalletExtension?: EthereumProvider;
-  trustwallet?: EthereumProvider;
-  phantom?: { ethereum?: EthereumProvider };
-  binancew3w?: EthereumProvider;
-  binance?: EthereumProvider;
-}
-
 export interface WalletWindow {
   ethereum?: EthereumProvider;
   okxwallet?: EthereumProvider;

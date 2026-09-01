@@ -4,8 +4,13 @@ require("dotenv").config();
 // Đọc biến môi trường từ .env
 const {
   ARC_TESTNET_RPC_URL,
+  ARC_MAINNET_RPC_URL,
   DEPLOYER_PRIVATE_KEY,
 } = process.env;
+
+const deployerAccounts = DEPLOYER_PRIVATE_KEY
+  ? [`0x${DEPLOYER_PRIVATE_KEY.replace(/^0x/, "")}`]
+  : [];
 
 /** @type import('hardhat/config').HardhatUserConfig */
 const config = {
@@ -28,9 +33,14 @@ const config = {
     arcTestnet: {
       url: ARC_TESTNET_RPC_URL || "https://rpc.testnet.arc.network",
       chainId: 5042002,
-      accounts: DEPLOYER_PRIVATE_KEY
-        ? [`0x${DEPLOYER_PRIVATE_KEY.replace(/^0x/, "")}`]
-        : [],
+      accounts: deployerAccounts,
+    },
+
+    // Arc Mainnet - dùng cho script deploy:arcMainnet.
+    // chainId để hardhat tự phát hiện từ RPC (điền lại khi có số chính thức).
+    arcMainnet: {
+      url: ARC_MAINNET_RPC_URL || "https://rpc.arc.network",
+      accounts: deployerAccounts,
     },
   },
 };

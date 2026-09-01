@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getAuthSession } from "@/lib/auth-guard";
 
 export async function POST(
   req: NextRequest,
@@ -8,11 +9,13 @@ export async function POST(
   try {
     const { id: jobId } = await params;
     const body = await req.json();
-    const { freelancerAddress, deliverableNote, deliverableLink } = body;
+    const { deliverableNote, deliverableLink } = body;
 
-    if (!freelancerAddress) {
-      return NextResponse.json({ error: "Xác thực địa chỉ ví Bên B thất bại." }, { status: 400 });
+    const session = await getAuthSession(req);
+    if (!session) {
+      return NextResponse.json({ error: "Vui lòng đăng nhập ví để bàn giao sản phẩm." }, { status: 401 });
     }
+    const callerAddress = session.walletAddress.toLowerCase();
 
     const contract = await prisma.contract.findUnique({
       where: { jobId }
@@ -22,7 +25,7 @@ export async function POST(
       return NextResponse.json({ error: "Không tìm thấy hợp đồng cho công việc này." }, { status: 404 });
     }
 
-    if (contract.freelancerAddress.toLowerCase() !== freelancerAddress.toLowerCase()) {
+    if (contract.freelancerAddress.toLowerCase() !== callerAddress) {
       return NextResponse.json({ error: "Chỉ Freelancer (Bên B) của hợp đồng mới được phép nộp sản phẩm." }, { status: 403 });
     }
 

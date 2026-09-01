@@ -124,6 +124,7 @@ model Application {
   job        Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
   freelancer User @relation("FreelancerApplications", fields: [freelancerAddress], references: [walletAddress], onDelete: Cascade)
 
+  @@unique([jobId, freelancerAddress])
   @@index([jobId])
   @@index([freelancerAddress])
   @@index([status])
